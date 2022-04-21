@@ -9,7 +9,7 @@ if (!requireNamespace("leidenAlg", quietly = TRUE))
 
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
-BiocManager::install('BiocNeighbors')
+BiocManager::install('BiocNeighbors', force = T)
 
 if (!requireNamespace("igraph", quietly = TRUE))
   install.packages("igraph")
