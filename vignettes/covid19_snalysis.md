@@ -41,21 +41,6 @@ python main.py --project_name covid19 --dim 50 --batch_size 16 --lr 0.001 --epoc
 [comment]: <> (Epoch [600/800]: Batch loss=89.7009506225586)
 [comment]: <> (Epoch [700/800]: Batch loss=83.0310287475586)
 [comment]: <> (Epoch [800/800]: Batch loss=77.57140350341797)
-
-*************** scSpace *****************
-Loading processed data......
-Load data ok
-=== Transfer Component Analysis ===
-Transfer Component Analysis done.
-=== Training encoder for source domain ===
-Epoch [100/800]: Batch loss=150.16043090820312
-Epoch [200/800]: Batch loss=125.23556518554688
-Epoch [300/800]: Batch loss=113.4454574584961
-Epoch [400/800]: Batch loss=104.0088882446289
-Epoch [500/800]: Batch loss=96.20250701904297
-Epoch [600/800]: Batch loss=89.17943572998047
-Epoch [700/800]: Batch loss=85.24288940429688
-Epoch [800/800]: Batch loss=77.9986801147461
 ```
 
 The spatial reconstruction result is stored at __`data/covid19/Processed_data`__.
