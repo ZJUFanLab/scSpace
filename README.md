@@ -43,7 +43,7 @@ In `scSpace` step:
 - `--Ks`: the number of nearest cells in space graph
 - `--Kg`: the number of nearest cells in gene expression graph
 - `--res`: the resolution for scSpace clustering
-- `--target_num`: the target number of clusters for scSpace clustering. If `--target_num 0` scSpace would apply clustering directly with resolution provided.
+- `--target_num`: the target number of clusters for scSpace clustering. If `--target_num 0` scSpace would apply clustering directly with resolution provided
 
 
 # Tutorials
