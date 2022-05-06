@@ -57,7 +57,7 @@ Rscript preprocess.R --project demo --normalize TRUE --n_features 2000
 [comment]: <> (Pre-processed have been done!)
 
 # scSpace
-python main.py --project_name demo --dim 50 --batch_size 16 --lr 0.001 --epoch_num 1000 --sample_mlp --hidden_size 128
+python main.py --project_name demo --dim 50 --batch_size 16 --lr 0.001 --epoch_num 1000 --hidden_size 128
 
 [comment]: <> (*************** scSpace *****************)
 [comment]: <> (Loading processed data......)
