@@ -37,7 +37,6 @@ In `scSpace` step:
 - `--batch_size`: the batch size for multiple layer perceptron model training
 - `--lr`: the learning rate for multiple layer perceptron model training
 - `--epoch_num`: the total epoch number for multiple layer perceptron model training
-- `--sample_mlp`: use only a simple multiple layer perceptron model with three-layers
 - `--hidden_size`: the hidden layer size for simple multiple layer perceptron model
 - `--sub_cluster`: apply sub-clustering analysis for a specific cell type. If `FLASE` scSpace would apply clustering for all cells in scRNA-seq data
 - `--Ks`: the number of nearest cells in space graph
