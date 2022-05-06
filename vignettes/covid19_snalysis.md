@@ -25,7 +25,7 @@ Rscript preprocess.R --project covid19 --sc_data sc_data --sc_meta sc_meta --st_
 [comment]: <> (Pre-processed have been done!)
 
 # scSpace
-python main.py --project_name covid19 --dim 50 --batch_size 16 --lr 0.001 --epoch_num 800 --sample_mlp --hidden_size 128
+python main.py --project_name covid19 --dim 50 --batch_size 16 --lr 0.001 --epoch_num 800 --hidden_size 128
 
 [comment]: <> (*************** scSpace *****************)
 [comment]: <> (Loading processed data......)
