@@ -18,10 +18,7 @@ def main():
 
     # load data and model
     st_dataloader = get_data_loader(args, st_meta=st_meta, st_data_new=st_new)
-    if args.sample_mlp:
-        mlp = init_model(net=MLP.sample_MLPEncoder(input_size=args.dim, hidden_size=args.hidden_size))
-    else:
-        mlp = init_model(net=MLP.MLPEncoder(input_size=args.dim))
+    mlp = init_model(net=MLP.sample_MLPEncoder(input_size=args.dim, hidden_size=args.hidden_size))
 
     print("=== Training encoder for source domain ===")
     losses = []
