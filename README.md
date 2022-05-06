@@ -49,7 +49,7 @@ In `scSpace` step:
 
 1. [Demonstration of scSpace on simulated data](vignettes/demo_data.md)
 
-2. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/%20mouse%20intestines%20analysis.md)
+2. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/mouse_intestines_analysis.md)
 
 3. [Spatial analysis of the invasion of myeloid subpopulations in Covid-19](vignettes/covid19_snalysis.md)
 
