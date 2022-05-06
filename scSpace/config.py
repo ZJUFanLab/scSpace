@@ -19,7 +19,6 @@ def loadArgums():
     parser.add_argument('--lr', '-l', default=0.001, help='learning rate eg:0.001', type=float)
     parser.add_argument('--epoch_num', '-ep', default=1000, help='epoch number eg:1000', type=int)
     parser.add_argument('--log_epoch', '-le', default=100, help='log epoch eg:100', type=int)
-    parser.add_argument("--sample_mlp", action='store_const', default=False, const=True)
     parser.add_argument('--hidden_size', '-hs', default=128, help='hidden_size for sample MLPEncoder eg:128', type=int)
 
     args = parser.parse_args()
