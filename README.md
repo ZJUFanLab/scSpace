@@ -39,8 +39,8 @@ In `scSpace` step:
 - `--epoch_num`: the total epoch number for multiple layer perceptron model training
 - `--hidden_size`: the hidden layer size for multiple layer perceptron model
 - `--sub_cluster`: apply sub-clustering analysis for a specific cell type. If `FLASE` scSpace would apply clustering for all cells in scRNA-seq data
-- `--idents`: the column name of the cell type in scRNA-seq metadata
-- `--select_celltype`: the specific cell type selected for sub-clustering analysis
+- `--idents`: the column name of the cell type in scRNA-seq metadata (only used when `--sub_cluster = TRUE`)
+- `--select_celltype`: the specific cell type selected for sub-clustering analysis (only used when `--sub_cluster = TRUE`)
 - `--Ks`: the number of nearest cells in space graph
 - `--Kg`: the number of nearest cells in gene expression graph
 - `--res`: the resolution for scSpace clustering
