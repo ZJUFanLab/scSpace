@@ -43,23 +43,6 @@ python main.py --project_name mouse_intestine --dim 50 --batch_size 16 --lr 0.00
 [comment]: <> (Epoch [800/1000]: Batch loss=139.908935546875)
 [comment]: <> (Epoch [900/1000]: Batch loss=133.37255859375)
 [comment]: <> (Epoch [1000/1000]: Batch loss=127.41557312011719)
-
-*************** scSpace *****************
-Loading processed data......
-Load data ok
-=== Transfer Component Analysis ===
-Transfer Component Analysis done.
-=== Training encoder for source domain ===
-Epoch [100/1000]: Batch loss=253.62864685058594
-Epoch [200/1000]: Batch loss=240.24256896972656
-Epoch [300/1000]: Batch loss=235.2732696533203
-Epoch [400/1000]: Batch loss=229.68228149414062
-Epoch [500/1000]: Batch loss=223.92889404296875
-Epoch [600/1000]: Batch loss=218.04544067382812
-Epoch [700/1000]: Batch loss=211.4386444091797
-Epoch [800/1000]: Batch loss=202.83926391601562
-Epoch [900/1000]: Batch loss=193.0808563232422
-Epoch [1000/1000]: Batch loss=183.89584350585938
 ```
 
 The spatial reconstruction result is stored at __`data/intestines/Processed_data`__.
