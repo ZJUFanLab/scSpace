@@ -43,11 +43,14 @@ in the [vignettes/data folder](vignettes/data) of this repository as examples to
 ## Tutorials
 Additional step-by-step tutorials now available! Preprocessed datasets used can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1a0dPYYFITrhmMhSeNc1HSWLfx6-bDy65?usp=sharing).
 
-1. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/intestines.ipynb)
+1. [Spatial reconstruction of human DLPFC spatial transcriptomics data](vignettes/DLPFC_slice151674.ipynb)
 
-2. [Spatial analysis of T cells subpopulations in melanoma](vignettes/melanoma.ipynb)
+2. [Spatial reconstruction of human SCC spatial transcriptomics data](vignettes/SCC_p2.ipynb)
 
-3. [Spatial analysis of the invasion of myeloid subpopulations in Covid-19](vignettes/covid19_snalysis.md)
+3. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/intestines.ipynb)
+
+4. [Spatial analysis of T cells subpopulations in melanoma](vignettes/melanoma.ipynb)
+
 
 ## About
 scSpace was developed by Jie Liao and Jingyang Qian. Should you have any questions, please contact Jie Liao at liaojie@zju.edu.cn, or Jingyang Qian at qianjingyang@zju.edu.cn
