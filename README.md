@@ -41,6 +41,7 @@ in the [vignettes/data folder](vignettes/data) of this repository as examples to
 
 
 ## Tutorials
+Additional step-by-step tutorials now available! Preprocessed datasets used can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1a0dPYYFITrhmMhSeNc1HSWLfx6-bDy65?usp=sharing).
 
 1. [Demonstration of scSpace on simulated data](vignettes/demo_data.md)
 
