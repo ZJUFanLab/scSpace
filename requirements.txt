@@ -6,3 +6,4 @@ scanpy==1.9.1
 scikit-learn==1.1.2
 scipy==1.9.2
 tqdm==4.64.1
+scikit-misc==0.1.4
