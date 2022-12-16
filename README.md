@@ -2,7 +2,7 @@
 
 ## Reconstruction of cell pseudo space from single-cell RNA sequencing data
 
-[![python 3.8](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/) [![R 4.1](https://img.shields.io/badge/R-4.1-brightgreen)](https://www.r-project.org/)
+[![python >=3.8](https://img.shields.io/badge/python-%3E%3D3.8-brightgreen)](https://www.python.org/) 
 
 scSpace (<u>**s**</u>ingle-<u>**c**</u>ell and <u>**s**</u>patial <u>**p**</u>osition <u>**a**</u>ssociated <u>**c**</u>o-<u>**e**</u>mbeddings) is an integrative algorithm that integrates spatial transcriptome data to reconstruct spatial associations of single cells within scRNA-seq data. Using [transfer component analysis (TCA)](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=5640675&tag=1), scSpace could extract the characteristic matrixes of spatial transcriptomics and scRNA-seq, and project single cells into a pseudo space via a [multiple layer perceptron (MLP)](https://en.wikipedia.org/wiki/Multilayer_perceptron) model, so that gene expression and spatial graph of cells can be embedded jointly for the further cell typing with higher accuracy and precision. 
 
