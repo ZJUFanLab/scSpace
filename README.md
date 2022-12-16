@@ -37,7 +37,7 @@ python setup.py install
 ## Quick Start
 To use scSpace we require five formatted `.csv` files as input (i.e. read in by pandas). We have included a toy dataset 
 in the [vignettes/data folder](vignettes/data) of this repository as examples to show how to use scSpace:
-* [Demonstration of scSpace on demo dataset]()
+* [Demonstration of scSpace on demo dataset](vignettes/demo.ipynb)
 
 
 ## Tutorials
