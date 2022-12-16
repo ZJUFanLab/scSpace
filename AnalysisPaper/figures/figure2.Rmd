@@ -1,0 +1,1285 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Validation of scSpace on DLPFC and STARmap spatial transcriptomics data
+
+```{r}
+library(Seurat)
+library(ggplot2)
+library(ggsignif)
+library(ggforce)
+library(mclust)
+library(dplyr)
+library(cowplot)
+library(reshape2)
+library(ggExtra)
+library(NMI)
+```
+
+### Load data
+```{r}
+load('../data/DLPFC/DLPFC.RDS')
+load('../data/STARmap/STARmap.RDS')
+```
+
+### Load custom functions
+```{r}
+source('../scripts/utils.R')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure2'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### Pre-processing
+```{r}
+meta_starmap$pseudo_space1 <- pseudo_space_starmap[, 1]
+meta_starmap$pseudo_space2 <- pseudo_space_starmap[, 2]
+```
+
+### DLPFC in original space and pseudo space
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 1: slice 151507, 151508, 151509, 151510
+color <- c('#EF4444', '#3B82F6', '#10B981', '#8B5CF6', '#F97316', '#EAB308', '#854D0E')
+p1 <- ggplot(meta_151507, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151507)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(meta_151507, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151507)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(meta_151508, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151508)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(meta_151508, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151508)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(meta_151509, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151509)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(meta_151509, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151509)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(meta_151510, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151510)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(meta_151510, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151510)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 2: slice 151669, 151670, 151671, 151672
+color <- c('#10B981', '#8B5CF6', '#F97316', '#EAB308', '#854D0E')
+p1 <- ggplot(meta_151669, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151669)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(meta_151669, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151669)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(meta_151670, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151670)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(meta_151671, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151671)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(meta_151671, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151671)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(meta_151671, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151509)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(meta_151672, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151510)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(meta_151672, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151672)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 3: slice 151673, 151674, 151675, 151676
+color <- c('#EF4444', '#3B82F6', '#10B981', '#8B5CF6', '#F97316', '#EAB308', '#854D0E')
+p1 <- ggplot(meta_151673, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151673)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(meta_151673, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151673)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(meta_151674, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151674)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(meta_151674, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151674)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(meta_151675, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151675)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(meta_151675, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151675)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(meta_151676, aes(imagerow, imagecol, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (151676)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(meta_151676, aes(pseudo_space1, pseudo_space2, color=Cell_type)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (151676)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+### Distance to L1 in original space and pseudo space
+```{r}
+# define functions
+cal_dist_to_l1_original <- function(meta){
+  if(length(intersect(unique(meta$Cell_type), 'Layer1')) > 0){
+    layer <- 'Layer1'
+  } else {
+    layer <- 'Layer3'
+  }
+  dist_obj <- cal_dist(
+    meta = meta,
+    coord_index = c('imagerow', 'imagecol'),
+    group_by = 'Cell_type',
+    selected_type = layer,
+    ignore_select_type = FALSE
+  )
+  return(dist_obj)
+}
+cal_dist_to_l1_pseudo <- function(meta){
+  if(length(intersect(unique(meta$Cell_type), 'Layer1')) > 0){
+    layer <- 'Layer1'
+  } else {
+    layer <- 'Layer3'
+  }
+  dist_obj <- cal_dist(
+    meta = meta,
+    coord_index = c('pseudo_space1', 'pseudo_space2'),
+    group_by = 'Cell_type',
+    selected_type = layer,
+    ignore_select_type = FALSE
+  )
+  return(dist_obj)
+} 
+dist_to_plot <- function(dist_obj){
+  dist_obj$group <- gsub('Layer1_', '', dist_obj$group)
+  dist_obj$group <- gsub('Layer3_', '', dist_obj$group)
+  obj <- data.frame(
+    group = aggregate(dist_obj$dist, by=list(dist_obj$group), median)$Group.1,
+    median = aggregate(dist_obj$dist, by=list(dist_obj$group), median)$x,
+    sd = aggregate(dist_obj$dist, by=list(dist_obj$group), sd)$x
+  )
+  return(obj)
+}
+```
+
+```{r}
+# distance to L1
+# donor 1: slice 151507, 151508, 151509, 151510
+dist_151507_original <- cal_dist_to_l1_original(meta = meta_151507)
+dist_151507_original <- dist_to_plot(dist_obj = dist_151507_original)
+dist_151507_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151507)
+dist_151507_pseudo <- dist_to_plot(dist_obj = dist_151507_pseudo)
+
+dist_151508_original <- cal_dist_to_l1_original(meta = meta_151508)
+dist_151508_original <- dist_to_plot(dist_obj = dist_151508_original)
+dist_151508_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151508)
+dist_151508_pseudo <- dist_to_plot(dist_obj = dist_151508_pseudo)
+
+dist_151509_original <- cal_dist_to_l1_original(meta = meta_151509)
+dist_151509_original <- dist_to_plot(dist_obj = dist_151509_original)
+dist_151509_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151509)
+dist_151509_pseudo <- dist_to_plot(dist_obj = dist_151509_pseudo)
+
+dist_151510_original <- cal_dist_to_l1_original(meta = meta_151510)
+dist_151510_original <- dist_to_plot(dist_obj = dist_151510_original)
+dist_151510_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151510)
+dist_151510_pseudo <- dist_to_plot(dist_obj = dist_151510_pseudo)
+
+# donor 2: slice 151669, 151670, 151671, 151672
+dist_151669_original <- cal_dist_to_l1_original(meta = meta_151669)
+dist_151669_original <- dist_to_plot(dist_obj = dist_151669_original)
+dist_151669_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151669)
+dist_151669_pseudo <- dist_to_plot(dist_obj = dist_151669_pseudo)
+
+dist_151670_original <- cal_dist_to_l1_original(meta = meta_151670)
+dist_151670_original <- dist_to_plot(dist_obj = dist_151670_original)
+dist_151670_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151670)
+dist_151670_pseudo <- dist_to_plot(dist_obj = dist_151670_pseudo)
+
+dist_151671_original <- cal_dist_to_l1_original(meta = meta_151671)
+dist_151671_original <- dist_to_plot(dist_obj = dist_151671_original)
+dist_151671_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151671)
+dist_151671_pseudo <- dist_to_plot(dist_obj = dist_151671_pseudo)
+
+dist_151672_original <- cal_dist_to_l1_original(meta = meta_151672)
+dist_151672_original <- dist_to_plot(dist_obj = dist_151672_original)
+dist_151672_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151672)
+dist_151672_pseudo <- dist_to_plot(dist_obj = dist_151672_pseudo)
+
+# donor 3: slice 151673, 151674, 151675, 151676
+dist_151673_original <- cal_dist_to_l1_original(meta = meta_151673)
+dist_151673_original <- dist_to_plot(dist_obj = dist_151673_original)
+dist_151673_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151673)
+dist_151673_pseudo <- dist_to_plot(dist_obj = dist_151673_pseudo)
+
+dist_151674_original <- cal_dist_to_l1_original(meta = meta_151674)
+dist_151674_original <- dist_to_plot(dist_obj = dist_151674_original)
+dist_151674_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151674)
+dist_151674_pseudo <- dist_to_plot(dist_obj = dist_151674_pseudo)
+
+dist_151675_original <- cal_dist_to_l1_original(meta = meta_151675)
+dist_151675_original <- dist_to_plot(dist_obj = dist_151675_original)
+dist_151675_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151675)
+dist_151675_pseudo <- dist_to_plot(dist_obj = dist_151675_pseudo)
+
+dist_151676_original <- cal_dist_to_l1_original(meta = meta_151676)
+dist_151676_original <- dist_to_plot(dist_obj = dist_151676_original)
+dist_151676_pseudo <- cal_dist_to_l1_pseudo(meta = meta_151676)
+dist_151676_pseudo <- dist_to_plot(dist_obj = dist_151676_pseudo)
+
+write.csv(dist_151507_original, file = paste0(output_dir, '/distance_to_l1_151507_original.csv'))
+write.csv(dist_151507_pseudo, file = paste0(output_dir, '/distance_to_l1_151507_pseudo.csv'))
+write.csv(dist_151508_original, file = paste0(output_dir, '/distance_to_l1_151508_original.csv'))
+write.csv(dist_151508_pseudo, file = paste0(output_dir, '/distance_to_l1_151508_pseudo.csv'))
+write.csv(dist_151509_original, file = paste0(output_dir, '/distance_to_l1_151509_original.csv'))
+write.csv(dist_151509_pseudo, file = paste0(output_dir, '/distance_to_l1_151509_pseudo.csv'))
+write.csv(dist_151510_original, file = paste0(output_dir, '/distance_to_l1_151510_original.csv'))
+write.csv(dist_151510_pseudo, file = paste0(output_dir, '/distance_to_l1_151510_pseudo.csv'))
+write.csv(dist_151669_original, file = paste0(output_dir, '/distance_to_l1_151669_original.csv'))
+write.csv(dist_151669_pseudo, file = paste0(output_dir, '/distance_to_l1_151669_pseudo.csv'))
+write.csv(dist_151670_original, file = paste0(output_dir, '/distance_to_l1_151670_original.csv'))
+write.csv(dist_151670_pseudo, file = paste0(output_dir, '/distance_to_l1_151670_pseudo.csv'))
+write.csv(dist_151671_original, file = paste0(output_dir, '/distance_to_l1_151671_original.csv'))
+write.csv(dist_151671_pseudo, file = paste0(output_dir, '/distance_to_l1_151671_pseudo.csv'))
+write.csv(dist_151672_original, file = paste0(output_dir, '/distance_to_l1_151672_original.csv'))
+write.csv(dist_151672_pseudo, file = paste0(output_dir, '/distance_to_l1_151672_pseudo.csv'))
+write.csv(dist_151673_original, file = paste0(output_dir, '/distance_to_l1_151673_original.csv'))
+write.csv(dist_151673_pseudo, file = paste0(output_dir, '/distance_to_l1_151673_pseudo.csv'))
+write.csv(dist_151674_original, file = paste0(output_dir, '/distance_to_l1_151674_original.csv'))
+write.csv(dist_151674_pseudo, file = paste0(output_dir, '/distance_to_l1_151674_pseudo.csv'))
+write.csv(dist_151675_original, file = paste0(output_dir, '/distance_to_l1_151675_original.csv'))
+write.csv(dist_151675_pseudo, file = paste0(output_dir, '/distance_to_l1_151675_pseudo.csv'))
+write.csv(dist_151676_original, file = paste0(output_dir, '/distance_to_l1_151676_original.csv'))
+write.csv(dist_151676_pseudo, file = paste0(output_dir, '/distance_to_l1_151676_pseudo.csv'))
+
+```
+
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 1: slice 151507, 151508, 151509, 151510
+p1 <- ggplot(dist_151507_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151507: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(dist_151507_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151507: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(dist_151508_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151508: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(dist_151508_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151508: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(dist_151509_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151509: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(dist_151509_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151509: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(dist_151510_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151510: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(dist_151510_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151510: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 2: slice 151669, 151670, 151671, 151672
+p1 <- ggplot(dist_151669_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151669: distance to L3 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(dist_151669_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151669: distance to L3 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(dist_151670_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151670: distance to L3 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(dist_151670_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151670: distance to L3 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(dist_151671_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151671: distance to L3 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(dist_151671_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151671: distance to L3 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(dist_151672_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151672: distance to L3 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(dist_151672_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 5))) +
+  theme_classic() +
+  ggtitle('151672: distance to L3 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+```{r fig.height = 6, fig.width = 15, fig.align = 'center'}
+# donor 3: slice 151673, 151674, 151675, 151676
+p1 <- ggplot(dist_151673_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151673: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(dist_151673_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151673: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p3 <- ggplot(dist_151674_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151674: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(dist_151674_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151674: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p5 <- ggplot(dist_151675_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151675: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p6 <- ggplot(dist_151675_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151675: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p7 <- ggplot(dist_151676_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151676: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p8 <- ggplot(dist_151676_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('151676: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p3, p5, p7, p2, p4, p6, p8, ncol = 4)
+```
+
+# Pearson correlation of all pairwise distance in original space and pseudo space (DLPFC)
+```{r}
+cal_pairwise_distance <- function(meta){
+  
+  # original space
+  a <- as.matrix(dist(meta[, c('imagerow', 'imagecol')]))
+  a <- a[lower.tri(a)]
+  
+  # pseudo space
+  b <- as.matrix(dist(meta[, c('pseudo_space1', 'pseudo_space2')]))
+  b <- b[lower.tri(b)]
+  
+  a <- a / max(a)
+  b <- b / max(b)
+  
+  df <- data.frame(original_space = a, pseudo_space = b)
+  
+  return(df)
+}
+```
+
+```{r}
+pairwise_151507 <- cal_pairwise_distance(meta = meta_151507)
+pairwise_151508 <- cal_pairwise_distance(meta = meta_151508)
+pairwise_151509 <- cal_pairwise_distance(meta = meta_151509)
+pairwise_151510 <- cal_pairwise_distance(meta = meta_151510)
+pairwise_151669 <- cal_pairwise_distance(meta = meta_151669)
+pairwise_151670 <- cal_pairwise_distance(meta = meta_151670)
+pairwise_151671 <- cal_pairwise_distance(meta = meta_151671)
+pairwise_151672 <- cal_pairwise_distance(meta = meta_151672)
+pairwise_151673 <- cal_pairwise_distance(meta = meta_151673)
+pairwise_151674 <- cal_pairwise_distance(meta = meta_151674)
+pairwise_151675 <- cal_pairwise_distance(meta = meta_151675)
+pairwise_151676 <- cal_pairwise_distance(meta = meta_151676)
+
+# pearson cor
+pearson_151507 <- round(cor(pairwise_151507$original_space, pairwise_151507$pseudo_space), 3)
+pearson_151508 <- round(cor(pairwise_151508$original_space, pairwise_151508$pseudo_space), 3)
+pearson_151509 <- round(cor(pairwise_151509$original_space, pairwise_151509$pseudo_space), 3)
+pearson_151510 <- round(cor(pairwise_151510$original_space, pairwise_151510$pseudo_space), 3)
+pearson_151669 <- round(cor(pairwise_151669$original_space, pairwise_151669$pseudo_space), 3)
+pearson_151670 <- round(cor(pairwise_151670$original_space, pairwise_151670$pseudo_space), 3)
+pearson_151671 <- round(cor(pairwise_151671$original_space, pairwise_151671$pseudo_space), 3)
+pearson_151672 <- round(cor(pairwise_151672$original_space, pairwise_151672$pseudo_space), 3)
+pearson_151673 <- round(cor(pairwise_151673$original_space, pairwise_151673$pseudo_space), 3)
+pearson_151674 <- round(cor(pairwise_151674$original_space, pairwise_151674$pseudo_space), 3)
+pearson_151675 <- round(cor(pairwise_151675$original_space, pairwise_151675$pseudo_space), 3)
+pearson_151676 <- round(cor(pairwise_151676$original_space, pairwise_151676$pseudo_space), 3)
+
+pcc_res <- data.frame(
+  Slice = c('151507', '151508', '151509', '151510', '151669', '151670', 
+            '151671', '151672', '151673', '151674', '151675', '151676'),
+  Donor = c(rep('Donor 1', 4), rep('Donor 2', 4), rep('Donor 3', 4)),
+  PCC = c(pearson_151507, pearson_151508, pearson_151509, pearson_151510, pearson_151669, pearson_151670,
+          pearson_151671, pearson_151672, pearson_151673, pearson_151674, pearson_151675, pearson_151676)
+)
+
+write.csv(pcc_res, file = paste0(output_dir, '/pairwise_distance_cor_DLPFC.csv'))
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+p1 <- ggplot(pcc_res, aes(x = Slice, y = PCC, fill = Donor)) +
+  geom_bar(stat = 'identity') +
+  theme_classic() +
+  ylim(c(0, 0.8)) +
+  scale_fill_manual(values = c('#E41A1C', '#377EB8', '#4DAF4A')) +
+  geom_text(aes(label = PCC), vjust=-1, size = 3) +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 0.5)) +
+  ggtitle('pearson correlation of pairwise distance of 12 DLPFC slices') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(pcc_res, aes(Donor, PCC, color = Donor))+
+  stat_boxplot(geom = "errorbar", width=0.3)+
+  geom_boxplot(width=0.5)+
+  geom_jitter(aes(fill = Donor), shape=21, colour = "black", size = 3) +
+  scale_color_manual(values= c('#E41A1C', '#377EB8', '#4DAF4A')) +
+  scale_fill_manual(values= c('#E41A1C', '#377EB8', '#4DAF4A')) +
+  theme_classic() +
+  ylim(c(0, 0.8)) +
+  ggtitle('pearson correlation of pairwise distance of 3 donors') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p2)
+```
+
+
+```{r fig.height = 3, fig.width = 15, fig.align = 'center'}
+# pairwise distance scatter plot
+# donor 1
+p1 <- ggplot(pairwise_151507, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151507 (PCC = ', pearson_151507, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(pairwise_151508, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151508 (PCC = ', pearson_151508, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p3 <- ggplot(pairwise_151509, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151509 (PCC = ', pearson_151509, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(pairwise_151510, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151510 (PCC = ', pearson_151510, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, p3, p4, ncol=4)
+```
+
+```{r fig.height = 3, fig.width = 15, fig.align = 'center'}
+# pairwise distance scatter plot
+# donor 2
+p1 <- ggplot(pairwise_151669, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151669 (PCC = ', pearson_151669, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(pairwise_151670, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151670 (PCC = ', pearson_151670, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p3 <- ggplot(pairwise_151671, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151671 (PCC = ', pearson_151671, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(pairwise_151672, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151672 (PCC = ', pearson_151672, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, p3, p4, ncol=4)
+```
+
+```{r fig.height = 3, fig.width = 15, fig.align = 'center'}
+# pairwise distance scatter plot
+# donor 3
+p1 <- ggplot(pairwise_151673, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151673 (PCC = ', pearson_151673, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(pairwise_151674, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151674 (PCC = ', pearson_151674, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p3 <- ggplot(pairwise_151675, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151675 (PCC = ', pearson_151675, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p4 <- ggplot(pairwise_151676, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('151676 (PCC = ', pearson_151676, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, p3, p4, ncol=4)
+```
+
+# Expression patterns of marker genes of each layer in original space and pseudo space (DLPFC)
+```{r}
+# slice 151673
+seu <- CreateSeuratObject(data_151673, meta.data = meta_151673)
+seu <- NormalizeData(seu)
+Idents(seu) <- 'Cell_type'
+markers <- FindAllMarkers(seu, only.pos = TRUE, logfc.threshold = 0.5)
+write.csv(markers, file = paste0(output_dir, '/DEGs_slice151673.csv'))
+
+genes <- c('MGP', 'HPCAL1', 'HOPX', 'NEFH', 'PCP4', 'KRT17', 'MOBP')
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 1
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[1], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[1], ' (Layer1)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[1], ' (Layer1)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 2
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[2], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[2], ' (Layer2)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer2', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer2', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[2], ' (Layer2)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 3
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[3], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[3], ' (Layer3)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer3', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer3', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[3], ' (Layer3)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 4
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[4], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[4], ' (Layer4)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer4', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer4', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[4], ' (Layer4)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 5
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[5], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[5], ' (Layer5)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer5', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer5', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[5], ' (Layer5)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Layer 6
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[6], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[6], ' (Layer6)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'Layer6', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'Layer6', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[6], ' (Layer6)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# WM
+meta_151673$gene <- as.numeric(seu@assays$RNA@data[genes[7], ])
+p1 <- ggplot() +
+  geom_point(meta_151673, mapping = aes(imagerow, imagecol, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[7], ' (WM)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_151673[meta_151673$Cell_type != 'WM', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_151673[meta_151673$Cell_type == 'WM', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[7], ' (WM)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+### STARmap in original space and pseudo space
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+color <- c('#EF4444', '#3B82F6', '#10B981', '#8B5CF6', '#F97316', '#EAB308', '#854D0E')
+p1 <- ggplot(meta_starmap, aes(X, Y, color=Layer)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Ground truth (STARmap)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(meta_starmap, aes(pseudo_space1, pseudo_space2, color=Layer)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = color) +
+  theme_classic() +
+  ggtitle('Pseudo space (STARmap)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r}
+# distance to L1
+# original
+dist_starmap_original <- cal_dist(
+  meta = meta_starmap,
+  coord_index = c('X', 'Y'),
+  group_by = 'Layer',
+  selected_type = 'L1',
+  ignore_select_type = FALSE)
+
+dist_starmap_original$group <- gsub('L1_', '', dist_starmap_original$group)
+dist_starmap_original <- data.frame(
+  group = aggregate(dist_starmap_original$dist, by=list(dist_starmap_original$group), median)$Group.1,
+  median = aggregate(dist_starmap_original$dist, by=list(dist_starmap_original$group), median)$x,
+  sd = aggregate(dist_starmap_original$dist, by=list(dist_starmap_original$group), sd)$x)
+
+# pseudo
+dist_starmap_pseudo <- cal_dist(
+  meta = meta_starmap,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'Layer',
+  selected_type = 'L1',
+  ignore_select_type = FALSE)
+
+dist_starmap_pseudo$group <- gsub('L1_', '', dist_starmap_pseudo$group)
+dist_starmap_pseudo <- data.frame(
+  group = aggregate(dist_starmap_pseudo$dist, by=list(dist_starmap_pseudo$group), median)$Group.1,
+  median = aggregate(dist_starmap_pseudo$dist, by=list(dist_starmap_pseudo$group), median)$x,
+  sd = aggregate(dist_starmap_pseudo$dist, by=list(dist_starmap_pseudo$group), sd)$x)
+
+
+write.csv(dist_starmap_original, file = paste0(output_dir, '/distance_to_l1_starmap_original.csv'))
+write.csv(dist_starmap_pseudo, file = paste0(output_dir, '/distance_to_l1_starmap_pseudo.csv'))
+
+```
+
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+ct_order <- c('L1', 'L2/3', 'L4', 'L5', 'L6', 'CC', 'HPC')
+dist_starmap_original$group <- factor(dist_starmap_original$group, levels = ct_order)
+dist_starmap_pseudo$group <- factor(dist_starmap_pseudo$group, levels = ct_order)
+
+p1 <- ggplot(dist_starmap_original, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('STARmap: distance to L1 (original space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(dist_starmap_pseudo, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 7))) +
+  theme_classic() +
+  ggtitle('STARmap: distance to L1 (pseudo space)') +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+cowplot::plot_grid(p1, p2)
+```
+
+# Pearson correlation of all pairwise distance in original space and pseudo space (STARmap)
+```{r}
+cal_pairwise_distance2 <- function(meta){
+  
+  # original space
+  a <- as.matrix(dist(meta[, c('X', 'Y')]))
+  a <- a[lower.tri(a)]
+  
+  # pseudo space
+  b <- as.matrix(dist(meta[, c('pseudo_space1', 'pseudo_space2')]))
+  b <- b[lower.tri(b)]
+  
+  a <- a / max(a)
+  b <- b / max(b)
+  
+  df <- data.frame(original_space = a, pseudo_space = b)
+  
+  return(df)
+}
+```
+
+```{r}
+pairwise_starmap <- cal_pairwise_distance2(meta = meta_starmap)
+pearson_starmap <- round(cor(pairwise_starmap$original_space, pairwise_starmap$pseudo_space), 3)
+
+pcc_res <- data.frame(
+  Data = 'STARmap',
+  PCC = pearson_starmap
+)
+
+write.csv(pcc_res, file = paste0(output_dir, '/pairwise_distance_cor_STARmap.csv'))
+```
+
+```{r fig.height = 6, fig.width = 8, fig.align = 'center'}
+# pairwise distance scatter plot
+p <- ggplot(pairwise_starmap, aes(original_space, pseudo_space)) +
+  stat_density2d(aes(fill = ..density..), geom = "raster", contour = FALSE) +
+  scale_fill_gradient(low = NA, high = '#1f77b4') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('STARmap (PCC = ', pearson_starmap, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# pearson correlation of X/Y coordinate
+pearson_x <- round(cor(meta_starmap$X, meta_starmap$pseudo_space1), 3)
+pearson_y <- round(cor(meta_starmap$Y, meta_starmap$pseudo_space2), 3)
+p1 <- ggplot(meta_starmap, aes(X, pseudo_space1)) +
+  geom_point(shape=21, size=2.5, fill = '#93C5FD', color = 'black') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('X coordinate (PCC = ', pearson_x, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot(meta_starmap, aes(Y, pseudo_space2)) +
+  geom_point(shape=21, size=2.5, fill = '#93C5FD', color = 'black') +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle(paste0('Y coordinate (PCC = ', pearson_y, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p2)
+```
+
+
+# Expression patterns of marker genes of each layer in original space and pseudo space (STARmap)
+```{r}
+# STARmap
+seu <- CreateSeuratObject(data_starmap, meta.data = meta_starmap)
+seu <- NormalizeData(seu)
+Idents(seu) <- 'Layer'
+markers <- FindAllMarkers(seu, only.pos = TRUE, logfc.threshold = 0.5)
+write.csv(markers, file = paste0(output_dir, '/DEGs_starmap.csv'))
+
+genes <- c('Pcdhac2', 'Lamp5', 'Zmat4', 'Nefl', 'Pcp4', 'Mbp', 'Sst')
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# Layer 1
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[1], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[1], ' (L1)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[1], ' (L1)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# Layer 2/3
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[2], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[2], ' (L2/3)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[2], ' (L2/3)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# Layer 4
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[3], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[3], ' (L4)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[3], ' (L4)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# Layer 5
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[4], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[4], ' (L5)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[4], ' (L5)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# Layer 6
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[5], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[5], ' (L6)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[5], ' (L6)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# CC
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[6], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[6], ' (CC)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[6], ' (CC)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# HPC
+meta_starmap$gene <- as.numeric(seu@assays$RNA@data[genes[7], ])
+p1 <- ggplot() +
+  geom_point(meta_starmap, mapping = aes(X, Y, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Original space: ', genes[7], ' (HPC)')) +
+  theme(plot.title = element_text(hjust = 0.5))  
+
+p2 <- ggplot() +
+  geom_point(meta_starmap[meta_starmap$Layer != 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  geom_point(meta_starmap[meta_starmap$Layer == 'L1', ], mapping = aes(pseudo_space1, pseudo_space2, color=gene)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[7], ' (HPC)')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2, ncol = 1)
+```
+
+# Expression trend of marker genes in X coordinate of original space and pseudo space (STARmap)
+```{r}
+plot_trend <- function(meta, gene_use){
+  meta$gene <- as.numeric(seu@assays$RNA@data[gene_use, ])
+  # X coordinates
+  meta <- meta[, c('original_x', 'pseudo_x', 'gene')]
+  meta$original_x <- (meta$original_x - min(meta$original_x)) / (max(meta$original_x - min(meta$original_x)))
+  meta$pseudo_x <- (meta$pseudo_x - min(meta$pseudo_x)) / (max(meta$pseudo_x - min(meta$pseudo_x)))
+  meta <- melt(meta, measure.vars = c('original_x', 'pseudo_x'))
+  
+  p <- ggplot(meta, aes(value, gene, group=variable)) +
+    geom_smooth(aes(color=variable)) +
+    scale_color_manual(values = c('#E41A1C', '#377EB8')) +
+    xlab('X coordinate') +
+    theme_classic() +
+    ggtitle(gene_use) +
+   theme(plot.title = element_text(hjust = 0.5))  
+  
+  return(p)
+}
+
+```
+
+```{r fig.height = 6, fig.width = 12, fig.align = 'center'}
+colnames(meta_starmap)[c(3, 4, 6, 7)] <- c('original_x', 'original_y', 'pseudo_x', 'pseudo_y')
+genes <- c('Pcdhac2', 'Lamp5', 'Zmat4', 'Nefl', 'Pcp4', 'Mbp', 'Sst')
+
+
+p1 <- plot_trend(meta = meta_starmap, gene_use = genes[1]) 
+p2 <- plot_trend(meta = meta_starmap, gene_use = genes[2])
+p3 <- plot_trend(meta = meta_starmap, gene_use = genes[3])
+p4 <- plot_trend(meta = meta_starmap, gene_use = genes[4])
+p5 <- plot_trend(meta = meta_starmap, gene_use = genes[5])
+p6 <- plot_trend(meta = meta_starmap, gene_use = genes[6])
+p7 <- plot_trend(meta = meta_starmap, gene_use = genes[7])
+
+cowplot::plot_grid(p1, p2, p3, p4, p5, p6, p7)
+```
+
+

@@ -1,0 +1,818 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Validation of scSpace on human middle temporal gyrus (MTG) scRNA-seq data
+```{r}
+library(Seurat)
+library(ggplot2)
+library(ggsignif)
+library(ggforce)
+library(mclust)
+library(dplyr)
+library(cowplot)
+library(reshape2)
+```
+
+### Load data
+```{r}
+# Ground Truth
+load('../data/hodge/hodge.RDS')
+```
+
+### Load custom functions
+```{r}
+source('../scripts/utils.R')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure4'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### Pre-processing
+```{r}
+sc_meta$pseudo_space1 <- pseudo_space[, 1]
+sc_meta$pseudo_space2 <- pseudo_space[, 2]
+sc_meta$scSpace <- NA
+sc_meta[rownames(rorb_cluster), ]$scSpace <- paste0('RORB_C', rorb_cluster$scSpace)
+sc_meta[rownames(fezf2_cluster), ]$scSpace <- paste0('FEZF2_C', fezf2_cluster$scSpace)
+sc_meta[rownames(themis_cluster), ]$scSpace <- paste0('THEMIS_C', themis_cluster$scSpace)
+sc_meta[rownames(lamp5_cluster), ]$scSpace <- paste0('LAMP5_C', lamp5_cluster$scSpace)
+sc_meta[rownames(pax6_cluster), ]$scSpace <- paste0('PAX6_C', pax6_cluster$scSpace)
+sc_meta[rownames(vip_cluster), ]$scSpace <- paste0('VIP_C', vip_cluster$scSpace)
+sc_meta[rownames(sst_cluster), ]$scSpace <- paste0('SST_C', sst_cluster$scSpace)
+sc_meta[rownames(pvalb_cluster), ]$scSpace <- paste0('PVALB_C', pvalb_cluster$scSpace)
+```
+
+
+### The spatial distribution pattern of each layer of MTG in pseudo space
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# Pseudo space
+p <- ggplot() +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L6', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L5', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L4', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L3', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L2', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  geom_point(sc_meta[sc_meta$brain_subregion == 'L1', ], 
+             mapping = aes(pseudo_space1,pseudo_space2,color = brain_subregion), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#10B981', '#854D0E', '#F97316', 
+                                '#EAB308', '#8B5CF6')) +
+  theme_classic()
+
+p
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# Calculate distance between each layers and L1
+dist_all <- cal_dist(
+  meta = sc_meta,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'brain_subregion',
+  selected_type = 'L1',
+  ignore_select_type = FALSE
+)
+
+p1 <- ggplot(data=dist_all, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = boxplot.stats(dist_all$dist)$stats[c(1, 5)]*1.1) +
+  theme_classic() +
+  scale_fill_manual(values = c('#EF4444', '#3B82F6', '#10B981', '#854D0E', '#F97316', 
+                               '#EAB308', '#8B5CF6'))
+
+sc_dist_plot <- data.frame(group = c('l1_l1', 'l1_l2', 'l1_l3', 'l1_l4', 'l1_l5', 'l1_l6'),
+                           median = aggregate(dist_all$dist, by=list(dist_all$group), median)$x,
+                           sd = aggregate(dist_all$dist, by=list(dist_all$group), sd)$x)
+
+p2 <- ggplot(sc_dist_plot, aes(x = group, y = median, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.4, size = 1) +
+  scale_color_manual(values = c(rep('black', 6))) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+### Spatial reconstruction of excitatory neurons
+```{r}
+# reconstruct the spatial structure of excitatory neurons
+exc <- sc_meta[sc_meta$class == 'Glutamatergic', ]
+exc[exc$cluster == 'Exc L5-6 SLC17A7 IL15', ]$cluster <- 'Exc L5-6 FEZF2 IL15'
+
+# the average layer position of each excitatory neurons were accessed from original publication (Hodge at al., Nature, 2019)
+exc_order <- c('Exc L2 LAMP5 LTK', 'Exc L2-3 LINC00507 FREM3', 'Exc L2-4 LINC00507 GLP2R', 
+               'Exc L3-4 RORB CARM1P1', 'Exc L3-5 RORB FILIP1L', 'Exc L3-5 RORB COL22A1',
+               'Exc L3-5 RORB TWIST2', 'Exc L3-5 RORB ESR1', 'Exc L4-5 RORB DAPK2', 
+               'Exc L4-5 RORB FOLH1B', 'Exc L4-6 RORB SEMA3E', 'Exc L4-5 FEZF2 SCN4B', 
+               'Exc L4-6 RORB C1R', 'Exc L4-6 FEZF2 IL26', 'Exc L5-6 RORB TTC12', 
+               'Exc L5-6 THEMIS CRABP1', 'Exc L5-6 THEMIS DCSTAMP', 'Exc L5-6 THEMIS FGF10', 
+               'Exc L5-6 FEZF2 EFTUD1P1', 'Exc L5-6 FEZF2 IL15', 'Exc L5-6 FEZF2 ABO', 
+               'Exc L5-6 THEMIS C1QL3', 'Exc L6 FEZF2 OR2T8', 'Exc L6 FEZF2 SCUBE1')
+
+# cells in L1
+l1 <- sc_meta[sc_meta$brain_subregion == 'L1', ]
+dist_to_l1 <- data.frame(
+  cell = paste0('C_', 1:nrow(rbind(l1, exc))),
+  pseudo_space1 = c(l1$pseudo_space1, exc$pseudo_space1),
+  pseudo_space2 = c(l1$pseudo_space2, exc$pseudo_space2),
+  celltype = c(l1$brain_subregion, exc$cluster)
+  )
+
+dist_l1 <- cal_dist(
+  meta = dist_to_l1,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'L1',
+  ignore_select_type = TRUE
+)
+dist_l1$group <- factor(dist_l1$group, levels = paste0('L1_', exc_order))
+
+# cells in L6
+l6 <- sc_meta[sc_meta$brain_subregion == 'L6', ]
+dist_to_l6 <- data.frame(
+  cell = paste0('C_', 1:nrow(rbind(l6, exc))),
+  pseudo_space1 = c(l6$pseudo_space1, exc$pseudo_space1),
+  pseudo_space2 = c(l6$pseudo_space2, exc$pseudo_space2),
+  celltype = c(l6$brain_subregion, exc$cluster)
+  )
+
+dist_l6 <- cal_dist(
+  meta = dist_to_l6,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'L6',
+  ignore_select_type = TRUE
+)
+dist_l6$group <- factor(dist_l6$group, levels = paste0('L6_', exc_order))
+
+```
+
+```{r fig.height = 4, fig.width = 8, fig.align = 'center'}
+sc_dist_plot <- data.frame(
+  group = rep(exc_order, 2),
+  median = c(aggregate(dist_l1$dist, by=list(dist_l1$group), median)$x,
+             aggregate(dist_l6$dist, by=list(dist_l6$group), median)$x),
+  sd = c(aggregate(dist_l1$dist, by=list(dist_l1$group), sd)$x,
+         aggregate(dist_l6$dist, by=list(dist_l6$group), sd)$x),
+  type = c(rep('L1', 24), rep('L6', 24)))
+
+p <- ggplot(sc_dist_plot, aes(x = group, y = median, group = type, color = type)) +
+  geom_point(size = 3, position = position_dodge(width = 0.9)) +
+  geom_line(size= 1, position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = (median - sd), ymax = (median + sd)), width = 0.6, 
+                size = 1, position = position_dodge(width = 0.9)) +
+  scale_color_manual(values = c('#EF4444', '#8B5CF6')) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 0.5))
+
+p
+```
+
+
+### Spatial reconstruction of inhibitory neurons
+```{r}
+# reconstruct the spatial structure of inhibitory neurons
+# Inhibitory neurons formed two major branches, distinguished by expression of ADARB2 and LHX6—similar to mouse cortex, in which these branches correlate with developmental origins in CGE and medial ganglionic eminence (MGE), respectively. The LHX6 branch included PVALB and SST subclasses and the ADARB2 branch contained LAMP5 PAX6 and VIP subclasses
+inh_meta <- sc_meta[sc_meta$class == 'GABAergic', ]
+
+pax6_id <- c('Inh L1-2 LAMP5 DBP', 'Inh L1 SST NMBR', 'Inh L1-2 PAX6 CDH12',
+             'Inh L1-2 PAX6 TNFAIP8L3', 'Inh L1-4 LAMP5 LCP2', 'Inh L2-6 LAMP5 CA1')
+sst_id <- c('Inh L1-3 SST CALB1', 'Inh L2-4 SST FRZB', 'Inh L3-5 SST ADGRG6',
+            'Inh L4-5 SST STK32A', 'Inh L4-6 SST B3GAT2', 'Inh L3-6 SST HPGD',
+            'Inh L3-6 SST NPY', 'Inh L4-6 SST GXYLT2', 'Inh L5-6 SST KLHDC8A',
+            'Inh L5-6 SST TH', 'Inh L5-6 SST NPM1P10')
+vip_id <- c('Inh L1 SST CHRNA4', 'Inh L1-2 GAD1 MC4R', 'Inh L1-2 SST BAGE2',
+            'Inh L1-2 VIP TSPAN12', 'Inh L1-2 VIP LBH', 'Inh L1-2 VIP PCDH20',
+            'Inh L1-3 VIP CHRM2', 'Inh L1-3 VIP GGH', 'Inh L1-3 VIP CCDC184',
+            'Inh L1-3 PAX6 SYT6', 'Inh L1-4 VIP CHRNA6', 'Inh L1-3 VIP ADAMTSL1',
+            'Inh L1-4 VIP PENK', 'Inh L1-4 VIP OPRM1', 'Inh L2-3 VIP CASC6',
+            'Inh L2-4 VIP SPAG17', 'Inh L2-4 VIP CBLN1', 'Inh L2-5 VIP SERPINF1',
+            'Inh L2-5 VIP TYR', 'Inh L2-6 VIP QPCT', 'Inh L3-6 VIP HS3ST3A1')
+pvalb_id <- c('Inh L2-4 PVALB WFDC2', 'Inh L2-5 PVALB SCUBE3', 'Inh L4-6 PVALB SULF1',
+              'Inh L4-5 PVALB MEPE', 'Inh L5-6 SST MIR548F2', 'Inh L5-6 PVALB LGR5',
+              'Inh L5-6 GAD1 GLP1R')
+
+inh_meta$group <- NA
+inh_meta[inh_meta$cluster %in% c(pax6_id, vip_id), ]$group <- 'ADARB2'
+inh_meta[inh_meta$cluster %in% c(sst_id, pvalb_id), ]$group <- 'LHX6'
+
+# l1
+l1 <- sc_meta[sc_meta$brain_subregion == 'L1', ]
+dist_to_l1 <- data.frame(
+  cell = paste0('C_', 1:(nrow(l1) + nrow(inh_meta))),
+  pseudo_space1 = c(l1$pseudo_space1, inh_meta$pseudo_space1),
+  pseudo_space2 = c(l1$pseudo_space2, inh_meta$pseudo_space2),
+  celltype = c(l1$brain_subregion, inh_meta$group)
+  )
+
+dist_l1 <- cal_dist(
+  meta = dist_to_l1,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'L1',
+  ignore_select_type = TRUE
+)
+
+# l6
+l6 <- sc_meta[sc_meta$brain_subregion == 'L6', ]
+dist_to_l6 <- data.frame(
+  cell = paste0('C_', 1:(nrow(l6) + nrow(inh_meta))),
+  pseudo_space1 = c(l6$pseudo_space1, inh_meta$pseudo_space1),
+  pseudo_space2 = c(l6$pseudo_space2, inh_meta$pseudo_space2),
+  celltype = c(l6$brain_subregion, inh_meta$group)
+  )
+
+dist_l6 <- cal_dist(
+  meta = dist_to_l6,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'L6',
+  ignore_select_type = TRUE
+)
+
+dist_l1$group <- factor(dist_l1$group, levels = c('L1_ADARB2', 'L1_LHX6'))
+dist_l6$group <- factor(dist_l6$group, levels = c('L6_ADARB2', 'L6_LHX6'))
+
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# The ADARB2 branch showed more diversity in L1–L3 than L4–L6, and the opposite was true for the LHX6 branch
+p1 <- ggplot(data=dist_l1, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = boxplot.stats(dist_l1$dist)$stats[c(1, 5)]*1.1) +
+  theme_classic() +
+  ggtitle('Distance to L1') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot(data=dist_l6, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = boxplot.stats(dist_l6$dist)$stats[c(1, 5)]*1.1) +
+  theme_classic() +
+  ggtitle('Distance to L6') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# inhibitory neurons in pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep$group <- 'others'
+sc_meta_rep[rownames(inh_meta), ]$group <- inh_meta$group
+inh_id <- grep('GABAergic', sc_meta_rep$class)
+p <- ggplot() +
+  geom_point(sc_meta_rep[-inh_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = group), size = 2) +
+  geom_point(sc_meta_rep[inh_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = group), size = 2) +
+  scale_color_manual(values = c('#F8766D', '#00BFC4', 'grey90')) +
+  theme_classic()
+
+p
+```
+
+### Spatial-informed clustering for 10 RORB-expressing types
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+rorb_id <- grep('RORB', sc_meta$cluster)
+rorb_meta <- sc_meta[rorb_id, ]
+rorb_data <- sc_data[, rownames(rorb_meta)]
+rorb <- run_Seurat(sc_meta = rorb_meta, sc_data = rorb_data, res = 0.37)
+
+rorb_meta <- rorb@meta.data
+rorb_meta$tsne1 <- rorb@reductions$tsne@cell.embeddings[, 1]
+rorb_meta$tsne2 <- rorb@reductions$tsne@cell.embeddings[, 2]
+rorb_meta$scSpace <- as.factor(rorb_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(rorb_meta, mapping = aes(tsne1, tsne2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#991B1B', '#A5B4FC', '#3B82F6', '#10B981', '#EAB308', '#FDE047',
+                                '#EF4444', '#F97316', '#854D0E', '#581C87')) +
+  theme_classic()
+
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep[-rorb_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[-rorb_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  geom_point(sc_meta_rep[rorb_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#991B1B', '#A5B4FC', '#3B82F6', '#10B981', '#EAB308', '#FDE047',
+                                '#EF4444', '#F97316', '#854D0E', '#581C87', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(rorb$cluster, rorb$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(rorb$cluster, rorb$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(rorb_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#991B1B',
+                                '#A5B4FC', '#FDE047', '#581C87', '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot() +
+  geom_point(rorb_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#854D0E', '#EF4444', '#EAB308', '#10B981', '#F97316',
+                                '#581C87', '#FDE047', '#A5B4FC', '#991B1B')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 7 FEZF2-expressing types
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+fezf2_id <- c(grep('FEZF2', sc_meta$cluster), grep('SLC17A7', sc_meta$cluster))
+fezf2_meta <- sc_meta[fezf2_id, ]
+fezf2_data <- sc_data[, rownames(fezf2_meta)]
+fezf2 <- run_Seurat(sc_meta = fezf2_meta, sc_data = fezf2_data, res = 0.5)
+
+fezf2_meta <- fezf2@meta.data
+fezf2_meta$tsne1 <- fezf2@reductions$tsne@cell.embeddings[, 1]
+fezf2_meta$tsne2 <- fezf2@reductions$tsne@cell.embeddings[, 2]
+fezf2_meta$scSpace <- as.factor(fezf2_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(fezf2_meta, mapping = aes(tsne1, tsne2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#F97316', '#854D0E', '#3B82F6', '#EF4444', '#EAB308', '#A5B4FC',
+                                '#10B981')) +
+  theme_classic()
+
+# pseudo space
+fezf2_id <- c(grep('FEZF2', sc_meta$cluster), grep('SLC17A7', sc_meta$cluster))
+sc_meta_rep <- sc_meta
+sc_meta_rep[-fezf2_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[-fezf2_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  geom_point(sc_meta_rep[fezf2_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#F97316', '#854D0E', '#3B82F6', '#EF4444', '#EAB308', '#A5B4FC',
+                                '#10B981', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(fezf2$cluster, fezf2$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(fezf2$cluster, fezf2$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(fezf2_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316',
+                                '#A5B4FC')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <-  ggplot() +
+  geom_point(fezf2_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#854D0E', '#3B82F6', '#EAB308', '#10B981', '#A5B4FC',
+                                '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 4 THEMIS-expressing types
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+themis_id <- c(grep('THEMIS', sc_meta$cluster))
+themis_meta <- sc_meta[themis_id, ]
+themis_data <- sc_data[, rownames(themis_meta)]
+themis <- run_Seurat(sc_meta = themis_meta, sc_data = themis_data, res = 0.14)
+
+themis_meta <- themis@meta.data
+themis_meta$tsne1 <- themis@reductions$tsne@cell.embeddings[, 1]
+themis_meta$tsne2 <- themis@reductions$tsne@cell.embeddings[, 2]
+themis_meta$scSpace <- as.factor(themis_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(themis_meta, mapping = aes(tsne1, tsne2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#F97316', '#10B981')) +
+  theme_classic()
+
+# pseudo space
+themis_id <- c(grep('THEMIS', sc_meta$cluster))
+sc_meta_rep <- sc_meta
+sc_meta_rep[-themis_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[-themis_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  geom_point(sc_meta_rep[themis_id, ], mapping = aes(pseudo_space1, pseudo_space2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#F97316', '#10B981', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(themis$cluster, themis$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(themis$cluster, themis$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(themis_meta, mapping = aes(tsne1, tsne2, color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#10B981', '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <-  ggplot() +
+  geom_point(themis_meta, mapping = aes(tsne1, tsne2, color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#F97316', '#10B981')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 3 types were enriched in L2–L3
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+select_ct <- c('Exc L2 LAMP5 LTK', 'Exc L2-3 LINC00507 FREM3', 'Exc L2-4 LINC00507 GLP2R')
+select_meta <- sc_meta[sc_meta$cluster %in% select_ct, ]
+select_data <- sc_data[, rownames(select_meta)]
+ct_L2 <- run_Seurat(sc_meta = select_meta, sc_data = select_data, res = 0.08)
+
+ct_L2_meta <- ct_L2@meta.data
+ct_L2_meta$tsne1 <- ct_L2@reductions$tsne@cell.embeddings[, 1]
+ct_L2_meta$tsne2 <- ct_L2@reductions$tsne@cell.embeddings[, 2]
+ct_L2_meta$scSpace <- as.factor(ct_L2_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(ct_L2_meta, mapping = aes(tsne1, tsne2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#10B981')) +
+  theme_classic()
+
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep$cluster2 <- 'others'
+sc_meta_rep[sc_meta_rep$cluster %in% select_ct, ]$cluster2 <- sc_meta_rep[sc_meta_rep$cluster %in% select_ct, ]$cluster
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[!sc_meta_rep$cluster %in% select_ct, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster2), size = 2) +
+  geom_point(sc_meta_rep[sc_meta_rep$cluster %in% select_ct, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster2), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#10B981', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(ct_L2$cluster, ct_L2$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(ct_L2$cluster, ct_L2$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(ct_L2_meta, mapping = aes(tsne1, tsne2, color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#10B981')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <-  ggplot() +
+  geom_point(ct_L2_meta, mapping = aes(tsne1, tsne2, color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#10B981')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 6 LAMP5 PAX6 subclass
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+inh_meta <- sc_meta[sc_meta$class == 'GABAergic', ]
+pax6_id <- c('Inh L1-2 LAMP5 DBP', 'Inh L1 SST NMBR', 'Inh L1-2 PAX6 CDH12',
+             'Inh L1-2 PAX6 TNFAIP8L3', 'Inh L1-4 LAMP5 LCP2', 'Inh L2-6 LAMP5 CA1')
+pax6_meta <- sc_meta[sc_meta$cluster %in% pax6_id, ]
+pax6_data <- sc_data[, rownames(pax6_meta)]
+pax6 <- run_Seurat(sc_meta = pax6_meta, sc_data = pax6_data, res = 0.47)
+
+pax6_meta <- pax6@meta.data
+pax6_meta$tsne1 <- pax6@reductions$tsne@cell.embeddings[, 1]
+pax6_meta$tsne2 <- pax6@reductions$tsne@cell.embeddings[, 2]
+pax6_meta$scSpace <- as.factor(pax6_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(pax6_meta, mapping = aes(tsne1, tsne2, color = cluster), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#10B981', '#EAB308', '#F97316', '#3B82F6', '#854D0E')) +
+  theme_classic()
+
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep[!sc_meta_rep$cluster %in% pax6_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[!sc_meta_rep$cluster %in% pax6_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  geom_point(sc_meta_rep[sc_meta_rep$cluster %in% pax6_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#10B981', '#EAB308', '#F97316', '#3B82F6', '#854D0E', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(pax6$cluster, pax6$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(pax6$cluster, pax6$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(pax6_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot() +
+  geom_point(pax6_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 21 VIP subclass
+```{r fig.height = 4, fig.width = 8, fig.align = 'center'}
+inh_meta <- sc_meta[sc_meta$class == 'GABAergic', ]
+vip_id <- c('Inh L1 SST CHRNA4', 'Inh L1-2 GAD1 MC4R', 'Inh L1-2 SST BAGE2',
+            'Inh L1-2 VIP TSPAN12', 'Inh L1-2 VIP LBH', 'Inh L1-2 VIP PCDH20',
+            'Inh L1-3 VIP CHRM2', 'Inh L1-3 VIP GGH', 'Inh L1-3 VIP CCDC184',
+            'Inh L1-3 PAX6 SYT6', 'Inh L1-4 VIP CHRNA6', 'Inh L1-3 VIP ADAMTSL1',
+            'Inh L1-4 VIP PENK', 'Inh L1-4 VIP OPRM1', 'Inh L2-3 VIP CASC6',
+            'Inh L2-4 VIP SPAG17', 'Inh L2-4 VIP CBLN1', 'Inh L2-5 VIP SERPINF1',
+            'Inh L2-5 VIP TYR', 'Inh L2-6 VIP QPCT', 'Inh L3-6 VIP HS3ST3A1')
+
+vip_meta <- sc_meta[sc_meta$cluster %in% vip_id, ]
+vip_data <- sc_data[, rownames(vip_meta)]
+vip <- run_Seurat(sc_meta = vip_meta, sc_data = vip_data, res = 3.5)
+
+vip_meta <- vip@meta.data
+vip_meta$tsne1 <- vip@reductions$tsne@cell.embeddings[, 1]
+vip_meta$tsne2 <- vip@reductions$tsne@cell.embeddings[, 2]
+vip_meta$scSpace <- as.factor(vip_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(vip_meta, mapping = aes(tsne1,tsne2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#94A3B8', '#854D0E', '#EF4444', '#84CC16', '#22C55E', '#0891B2',
+                                '#5EEAD4', '#10B981', '#881337', '#3B82F6', '#EAB308', '#FED7AA',
+                                '#FDE047', '#FEB915', '#F97316', '#D946EF', '#F56867', '#581C87',
+                                '#A5B4FC', '#8B5CF6', '#991B1B')) +
+  theme_classic()
+
+p1
+```
+
+```{r fig.height = 4, fig.width = 8, fig.align = 'center'}
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep[!sc_meta_rep$cluster %in% vip_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[!sc_meta_rep$cluster %in% vip_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  geom_point(sc_meta_rep[sc_meta_rep$cluster %in% vip_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#94A3B8', '#854D0E', '#EF4444', '#84CC16', '#22C55E', '#0891B2',
+                                '#5EEAD4', '#10B981', '#881337', '#3B82F6', '#EAB308', '#FED7AA',
+                                '#FDE047', '#FEB915', '#F97316', '#D946EF', '#F56867', '#581C87',
+                                '#A5B4FC', '#8B5CF6', '#991B1B', 'grey90')) +
+  theme_classic()
+
+p2
+```
+
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(vip$cluster, vip$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(vip$cluster, vip$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(vip_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316',
+                                '#A5B4FC', '#991B1B', '#581C87', '#FDE047', '#22C55E', '#D946EF',
+                                '#8B5CF6', '#881337', '#94A3B8', '#0891B2', '#84CC16', '#FED7AA',
+                                '#5EEAD4', '#F56867', '#FEB915')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot() +
+  geom_point(vip_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#854D0E', '#EF4444', '#10B981', '#F56867', '#991B1B', '#EAB308',
+                                '#FDE047', '#3B82F6', '#FED7AA', '#A5B4FC', '#581C87', '#8B5CF6',
+                                '#D946EF', '#881337', '#94A3B8', '#22C55E', '#0891B2', '#F97316',
+                                '#84CC16', '#5EEAD4', '#FEB915')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 11 SST subclass
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+inh_meta <- sc_meta[sc_meta$class == 'GABAergic', ]
+sst_id <- c('Inh L1-3 SST CALB1', 'Inh L2-4 SST FRZB', 'Inh L3-5 SST ADGRG6',
+            'Inh L4-5 SST STK32A', 'Inh L4-6 SST B3GAT2', 'Inh L3-6 SST HPGD',
+            'Inh L3-6 SST NPY', 'Inh L4-6 SST GXYLT2', 'Inh L5-6 SST KLHDC8A',
+            'Inh L5-6 SST TH', 'Inh L5-6 SST NPM1P10')
+
+sst_meta <- sc_meta[sc_meta$cluster %in% sst_id, ]
+sst_data <- sc_data[, rownames(sst_meta)]
+sst <- run_Seurat(sc_meta = sst_meta, sc_data = sst_data, res = 1.1)
+
+sst_meta <- sst@meta.data
+sst_meta$tsne1 <- sst@reductions$tsne@cell.embeddings[, 1]
+sst_meta$tsne2 <- sst@reductions$tsne@cell.embeddings[, 2]
+sst_meta$scSpace <- as.factor(sst_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(sst_meta, mapping = aes(tsne1,tsne2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#F97316', '#EAB308', '#854D0E', '#FDE047', '#10B981',
+                                '#EF4444', '#991B1B', '#22C55E', '#A5B4FC', '#581C87')) +
+  theme_classic()
+
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep[!sc_meta_rep$cluster %in% sst_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[!sc_meta_rep$cluster %in% sst_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  geom_point(sc_meta_rep[sc_meta_rep$cluster %in% sst_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#F97316', '#EAB308', '#854D0E', '#FDE047', '#10B981',
+                                '#EF4444', '#991B1B', '#22C55E', '#A5B4FC', '#581C87', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(sst$cluster, sst$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(sst$cluster, sst$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(sst_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#EAB308', '#854D0E', '#10B981', '#A5B4FC',
+                                '#F97316', '#991B1B', '#581C87', '#FDE047', '#22C55E')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot() +
+  geom_point(sst_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#10B981', '#A5B4FC', '#EAB308', '#991B1B',
+                                '#22C55E', '#F97316', '#854D0E', '#FDE047', '#581C87')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 7 PVALB subclass
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+inh_meta <- sc_meta[sc_meta$class == 'GABAergic', ]
+pvalb_id <- c('Inh L2-4 PVALB WFDC2', 'Inh L2-5 PVALB SCUBE3', 'Inh L4-6 PVALB SULF1',
+            'Inh L4-5 PVALB MEPE', 'Inh L5-6 SST MIR548F2', 'Inh L5-6 PVALB LGR5',
+            'Inh L5-6 GAD1 GLP1R')
+
+pvalb_meta <- sc_meta[sc_meta$cluster %in% pvalb_id, ]
+pvalb_data <- sc_data[, rownames(pvalb_meta)]
+pvalb <- run_Seurat(sc_meta = pvalb_meta, sc_data = pvalb_data, res = 0.35)
+
+pvalb_meta <- pvalb@meta.data
+pvalb_meta$tsne1 <- pvalb@reductions$tsne@cell.embeddings[, 1]
+pvalb_meta$tsne2 <- pvalb@reductions$tsne@cell.embeddings[, 2]
+pvalb_meta$scSpace <- as.factor(pvalb_meta$scSpace)
+
+# Ground Truth
+# tsne
+p1 <- ggplot() +
+  geom_point(pvalb_meta, mapping = aes(tsne1,tsne2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', '#EAB308', '#3B82F6', '#F97316', '#10B981',
+                                '#854D0E')) +
+  theme_classic()
+
+# pseudo space
+sc_meta_rep <- sc_meta
+sc_meta_rep[!sc_meta_rep$cluster %in% pvalb_id, ]$cluster <- 'others'
+p2 <- ggplot() +
+  geom_point(sc_meta_rep[!sc_meta_rep$cluster %in% pvalb_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  geom_point(sc_meta_rep[sc_meta_rep$cluster %in% pvalb_id, ], mapping = aes(pseudo_space1,pseudo_space2,color = cluster), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', '#EAB308', '#3B82F6', '#F97316', '#10B981',
+                                '#854D0E', 'grey90')) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# scSpace compared with Seurat 
+seurat_ari <- round(adjustedRandIndex(pvalb$cluster, pvalb$seurat_clusters), 3)
+scspace_ari <- round(adjustedRandIndex(pvalb$cluster, pvalb$scSpace), 3)
+
+p1 <- ggplot() +
+  geom_point(pvalb_meta, mapping = aes(tsne1,tsne2,color = scSpace), size = 2) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#EAB308', '#854D0E', '#10B981', '#A5B4FC',
+                                '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p2 <- ggplot() +
+  geom_point(pvalb_meta, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#854D0E', '#EAB308', '#10B981', '#A5B4FC',
+                                '#F97316')) +
+  theme_classic() +
+  ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### Spatial-informed clustering for 7 PVALB subclass
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+ari_all <- data.frame(
+  type = c('RORB', 'FEZF2', 'THEMIS', 'L2–L3', 'LAMP5/PAX6', 'VIP', 'SST', 'PVALB'),
+  scSpace = c(round(adjustedRandIndex(rorb$cluster, rorb$scSpace), 3),
+              round(adjustedRandIndex(fezf2$cluster, fezf2$scSpace), 3),
+              round(adjustedRandIndex(themis$cluster, themis$scSpace), 3),
+              round(adjustedRandIndex(ct_L2$cluster, ct_L2$scSpace), 3),
+              round(adjustedRandIndex(pax6$cluster, pax6$scSpace), 3),
+              round(adjustedRandIndex(vip$cluster, vip$scSpace), 3),
+              round(adjustedRandIndex(sst$cluster, sst$scSpace), 3),
+              round(adjustedRandIndex(pvalb$cluster, pvalb$scSpace), 3)),
+  Seurat = c(round(adjustedRandIndex(rorb$cluster, rorb$seurat_clusters), 3),
+             round(adjustedRandIndex(fezf2$cluster, fezf2$seurat_clusters), 3),
+             round(adjustedRandIndex(themis$cluster, themis$seurat_clusters), 3),
+             round(adjustedRandIndex(ct_L2$cluster, ct_L2$seurat_clusters), 3),
+             round(adjustedRandIndex(pax6$cluster, pax6$seurat_clusters), 3),
+             round(adjustedRandIndex(vip$cluster, vip$seurat_clusters), 3),
+             round(adjustedRandIndex(sst$cluster, sst$seurat_clusters), 3),
+             round(adjustedRandIndex(pvalb$cluster, pvalb$seurat_clusters), 3))
+)
+
+write.csv(ari_all, file = paste0(output_dir, '/ARI_all.csv'))
+
+ari_all <- melt(ari_all)
+p <- ggplot(ari_all, aes(type, value, fill = variable)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  theme_classic() +
+  ggtitle('ARI for 8 neurons class') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

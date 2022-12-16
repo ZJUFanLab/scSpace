@@ -1,0 +1,821 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Validation of scSpace on human embryonic heart scRNA-seq data
+```{r}
+library(Seurat)
+library(ggplot2)
+library(ggsignif)
+library(ggforce)
+library(mclust)
+library(dplyr)
+library(cowplot)
+library(reshape2)
+library(ggExtra)
+library(NMI)
+```
+
+### Load data
+```{r}
+# Ground Truth
+load('../data/heart/heart.RDS')
+```
+
+### Load custom functions
+```{r}
+source('../scripts/utils.R')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure3'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### Pre-processing
+```{r}
+sc_meta$pseudo_space1 <- pseudo_space[, 1]
+sc_meta$pseudo_space2 <- pseudo_space[, 2]
+sc_meta$scSpace <- scSpace_cluster$scSpace
+color <- c('#3B82F6', '#5EEAD4', '#EAB308', '#10B981', '#854D0E', 
+           '#84CC16', '#881337', '#991B1B', '#EF4444', '#D946EF',
+           '#F97316', '#A5B4FC', '#0891B2', '#8B5CF6')
+```
+
+### Pseudo space of all celltypes
+```{r fig.height = 4, fig.width = 8, fig.align = 'center'}
+p <- ggplot() +
+  geom_point(sc_meta, mapping = aes(pseudo_space1, pseudo_space2, color=celltype), size=2)+
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#0891B2', '#881337', '#991B1B', 
+                                '#EAB308', '#84CC16', '#854D0E', '#D946EF', '#5EEAD4',
+                                '#8B5CF6', '#A5B4FC', '#F97316', '#10B981')) +
+  theme_classic() +
+  ggtitle('Pseudo space of all celltypes') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p
+```
+
+### Pseudo space of three cardiomyocytes
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# 3 cardiomyocytes
+card_ct <- c('Atrial cardiomyocytes', 'Myoz2-enriched cardiomyocytes', 'Ventricular cardiomyocytes')
+sc_meta$celltype2 <- sc_meta$celltype
+sc_meta[!sc_meta$celltype %in% card_ct, ]$celltype2 <- 'Others'
+
+p1 <- ggplot() +
+  geom_point(sc_meta[sc_meta$celltype2 == 'Others', ], mapping = aes(pseudo_space1,pseudo_space2, color = celltype2), size = 2) +
+  geom_point(sc_meta[sc_meta$celltype2 != 'Others', ], mapping = aes(pseudo_space1,pseudo_space2, color = celltype2), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', 'grey90', '#10B981')) +
+  theme_classic() +
+  ggtitle('Pseudo space of 3 cardiomyocytes') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p1
+```
+
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+p2 <- ggplot() +
+  geom_point(sc_meta[sc_meta$celltype2 != 'Others', ], mapping = aes(pseudo_space1,pseudo_space2, color = celltype2), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', '#10B981')) +
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle('Pseudo space of 3 cardiomyocytes') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+p2 <- ggExtra::ggMarginal(p = p2, type = "density", groupFill = T)
+
+p2
+```
+
+```{r fig.height = 6, fig.width = 10, fig.align = 'center'}
+dist_to_atrial <- cal_dist(
+  meta = sc_meta[sc_meta$celltype %in% card_ct, ],
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'Atrial cardiomyocytes',
+  ignore_select_type = TRUE
+)
+dist_to_atrial[dist_to_atrial$group == 'Atrial cardiomyocytes_Myoz2-enriched cardiomyocytes', ]$group <- 'Myoz2-enriched'
+dist_to_atrial[dist_to_atrial$group == 'Atrial cardiomyocytes_Ventricular cardiomyocytes', ]$group <- 'Ventricular'
+
+dist_to_ventricular <- cal_dist(
+  meta = sc_meta[sc_meta$celltype %in% card_ct, ],
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'celltype',
+  selected_type = 'Ventricular cardiomyocytes',
+  ignore_select_type = TRUE
+)
+  
+dist_to_ventricular[dist_to_ventricular$group == 'Ventricular cardiomyocytes_Myoz2-enriched cardiomyocytes', ]$group <- 'Myoz2-enriched'
+dist_to_ventricular[dist_to_ventricular$group == 'Ventricular cardiomyocytes_Atrial cardiomyocytes', ]$group <- 'Atrial'
+
+p1 <- ggplot(data=dist_to_atrial, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#10B981') )+
+  theme_classic() +
+  ggtitle('Distance to Atrial cardiomyocytes') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggsignif::geom_signif(comparisons = list(c('Myoz2-enriched', 'Ventricular')), test = 'wilcox.test')
+
+dist_to_ventricular$group <- factor(dist_to_ventricular$group, levels = c('Myoz2-enriched', 'Atrial'))
+p2 <- ggplot(data=dist_to_ventricular, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#EF4444') )+
+  theme_classic() +
+  ggtitle('Distance to Ventricular cardiomyocytes') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggsignif::geom_signif(comparisons = list(c('Myoz2-enriched', 'Atrial')), test = 'wilcox.test')
+
+cowplot::plot_grid(p1, p2)
+```
+
+
+### Spatial-informed clustering
+```{r fig.height = 4, fig.width = 8, fig.align = 'center'}
+seu_obj <- run_Seurat(sc_meta = sc_meta, sc_data = sc_data, res = 0.44)
+sc_meta <- seu_obj@meta.data
+sc_meta$tsne1 <- seu_obj@reductions$tsne@cell.embeddings[, 1]
+sc_meta$tsne2 <- seu_obj@reductions$tsne@cell.embeddings[, 2]
+sc_meta$scSpace <- as.factor(sc_meta$scSpace)
+
+# ground truth
+p <- ggplot() +
+  geom_point(sc_meta, mapping = aes(tsne1, tsne2, color = celltype)) +
+  geom_circle(aes(x0=-7, y0=33, r=20), color="black", linetype=2) + 
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#0891B2', '#881337', '#991B1B', 
+                                '#EAB308', '#84CC16', '#854D0E', '#D946EF', '#5EEAD4',
+                                '#8B5CF6', '#A5B4FC', '#F97316', '#10B981')) + 
+  theme_classic() +
+  ggtitle('t-SNE of Ground truth') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p
+```
+
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+# ARI for all cell types
+scspace_ari <- round(adjustedRandIndex(sc_meta$scSpace, sc_meta$celltype), 3)
+seurat_ari <- round(adjustedRandIndex(sc_meta$seurat_clusters, sc_meta$celltype), 3)
+
+# scSpace
+p1 <- ggplot() +
+  geom_point(sc_meta, mapping = aes(tsne1, tsne2, color = scSpace)) +
+  geom_circle(aes(x0=-7, y0=33, r=20), color="black", linetype=2) + 
+  scale_color_manual(values = c('#3B82F6', '#5EEAD4', '#EAB308', '#10B981', '#854D0E', 
+                                '#84CC16', '#881337', '#991B1B', '#EF4444', '#D946EF',
+                                '#F97316', '#A5B4FC', '#0891B2', '#8B5CF6')) + 
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Seurat
+p2 <- ggplot() +
+    geom_point(sc_meta, mapping = aes(tsne1, tsne2, color = seurat_clusters)) +
+    geom_circle(aes(x0=-7, y0=33, r=20), color="black", linetype=2) + 
+    scale_color_manual(values = c('#EAB308', '#3B82F6', '#10B981', '#5EEAD4', '#854D0E', 
+                                  '#F97316', '#A5B4FC', '#84CC16', '#881337', '#991B1B',
+                                  '#D946EF', '#0891B2', '#8B5CF6', '#EF4444')) + 
+    theme_classic() +
+    ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+cowplot::plot_grid(p1, p2)
+```
+
+### Spatial-informed clustering for three cardiomyocytes
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+# extract targeted ROI from t-SNE coordinates
+card_meta <- sc_meta[sc_meta$tsne1 >= (-7 - 20) & sc_meta$tsne1 < (-7 + 20)
+                     & sc_meta$tsne2 >= (33 - 20) & sc_meta$tsne2 < (33 + 20), ]
+
+# ARI for all cell types
+scspace_ari <- round(adjustedRandIndex(card_meta$scSpace, card_meta$celltype), 3)
+seurat_ari <- round(adjustedRandIndex(card_meta$seurat_clusters, card_meta$celltype), 3)
+
+# Ground truth
+p1 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = celltype)) +
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', '#10B981')) + 
+  theme_classic() +
+  ggtitle(paste0('Ground truth')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# scSpace
+p2 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = scSpace)) +
+  scale_color_manual(values = c('#10B981', '#EF4444', '#A5B4FC')) + 
+  theme_classic() +
+  ggtitle(paste0('scSpace (ARI: ', scspace_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Seurat
+p3 <- ggplot() +
+    geom_point(card_meta, mapping = aes(tsne1, tsne2, color = seurat_clusters)) +
+    scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444')) + 
+    theme_classic() +
+    ggtitle(paste0('Seurat (ARI: ', seurat_ari, ')')) +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+cowplot::plot_grid(p2, p3, p1)
+
+```
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+# ARI/NMI
+df <- data.frame(
+  value = c(adjustedRandIndex(card_meta$scSpace,card_meta$celltype),
+            adjustedRandIndex(card_meta$seurat_clusters,card_meta$celltype),
+            NMI(data.frame(cell = 1:nrow(card_meta), clu = card_meta$celltype),
+                data.frame(cell = 1:nrow(card_meta), clu = card_meta$scSpace))$value,
+            NMI(data.frame(cell = 1:nrow(card_meta), clu = card_meta$celltype),
+                data.frame(cell = 1:nrow(card_meta), clu = card_meta$seurat_clusters))$value),
+  method = c('scSpace', 'Seurat', 'scSpace', 'Seurat'),
+  index = c('ARI', 'ARI', 'NMI', 'NMI'))
+
+write.csv(df, file = paste0(output_dir, '/Clustering_result_for_cardiomyocytes.csv'))
+
+p <- ggplot(df, aes(index, value, fill = method, color = method)) +
+  geom_bar(stat = 'identity', position=position_dodge(width = 0.9), width = 0.75) +
+  geom_text(aes(label = round(value, 3)), position=position_dodge(width = 0.9), vjust=-1) +
+  scale_fill_manual(values = c('#984EA3','#4DAF4A')) +
+  scale_color_manual(values = c('black', 'black')) +
+  theme_classic() +
+  ggtitle(paste0('Clustering ARI / NMI for cardiomyocytes')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p
+```
+
+### Pseudo space of three clusters of cardiomyocytes defined by scSpace
+
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+sc_meta$celltype3 <- sc_meta$scSpace
+sc_meta$celltype3 <- as.character(sc_meta$celltype3)
+sc_meta[setdiff(rownames(sc_meta), rownames(card_meta)), ]$celltype3 <- 'Others'
+
+p <- ggplot() +
+  geom_point(sc_meta[sc_meta$celltype3 == 'Others', ], mapping = aes(pseudo_space1,pseudo_space2, color = celltype3), size = 2) +
+  geom_point(sc_meta[sc_meta$celltype3 != 'Others', ], mapping = aes(pseudo_space1,pseudo_space2, color = celltype3), size = 2) +
+  scale_color_manual(values = c('#A5B4FC', '#10B981', '#EF4444', 'grey90')) +
+  theme_classic() +
+  ggtitle('Pseudo space of 3 clusters of cardiomyocytes defined by scSpace') +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+p
+```
+
+```{r fig.height = 6, fig.width = 10, fig.align = 'center'}
+card_meta$scSpace <- as.character(card_meta$scSpace)
+dist_to_c4 <- cal_dist(
+  meta = card_meta,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'scSpace',
+  selected_type = '3',
+  ignore_select_type = TRUE
+)
+dist_to_c4[dist_to_c4$group == '3_11', ]$group <- 'C12'
+dist_to_c4[dist_to_c4$group == '3_8', ]$group <- 'C9'
+
+dist_to_c9 <- cal_dist(
+  meta = card_meta,
+  coord_index = c('pseudo_space1', 'pseudo_space2'),
+  group_by = 'scSpace',
+  selected_type = '8',
+  ignore_select_type = TRUE
+)
+dist_to_c9[dist_to_c9$group == '8_3', ]$group <- 'C4'
+dist_to_c9[dist_to_c9$group == '8_11', ]$group <- 'C12'
+
+p1 <- ggplot(data=dist_to_c4, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#EF4444') )+
+  theme_classic() +
+  ggtitle('Distance to C4') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggsignif::geom_signif(comparisons = list(c('C12', 'C9')), test = 'wilcox.test')
+
+p2 <- ggplot(data=dist_to_c9, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#10B981') )+
+  theme_classic() +
+  ggtitle('Distance to C9') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggsignif::geom_signif(comparisons = list(c('C12', 'C4')), test = 'wilcox.test')
+
+cowplot::plot_grid(p1, p2)
+```
+
+### Expression patterns of marker genes of three clusters of cardiomyocytes defined by scSpace in pseudo space
+```{r}
+Idents(seu_obj) <- 'scSpace'
+markers <- FindAllMarkers(seu_obj, only.pos = TRUE, logfc.threshold = 0.5)
+markers <- markers[markers$p_val_adj < 0.05, ]
+markers <- markers[markers$cluster %in% c(3, 8, 11), ]
+
+write.csv(markers, file = paste0(output_dir, '/DEGs_for_three_clusters_scSpace.csv'))
+```
+
+```{r fig.height = 4, fig.width = 12, fig.align = 'center'}
+# C4
+genes <- c('MYH7','SORBS2','NAV1','TGM2','FBN2')
+sc_meta$gene1 <- as.numeric(seu_obj@assays$RNA@data[genes[1], ])
+p1 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene1 == 0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene1>0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[1], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p2 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene1 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene1>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[1], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene2 <- as.numeric(seu_obj@assays$RNA@data[genes[2], ])
+p3 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene2 == 0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene2>0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[2], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p4 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene2 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene2>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[2], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene3 <- as.numeric(seu_obj@assays$RNA@data[genes[3], ])
+p5 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene3 == 0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene3>0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[3], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p6 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene3 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene3>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[3], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene4 <- as.numeric(seu_obj@assays$RNA@data[genes[4], ])
+p7 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene4 == 0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene4>0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[4], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p8 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene4 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene4>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[4], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene5 <- as.numeric(seu_obj@assays$RNA@data[genes[5], ])
+p9 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene5 == 0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene5>0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[5], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p10 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '3', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene5 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '3'& sc_meta$gene5>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[5], ' (C4)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p3, p5, p7, p9, p2, p4, p6, p8, p10, ncol = 5)
+```
+
+
+```{r fig.height = 4, fig.width = 12, fig.align = 'center'}
+# C9
+genes <- c('MYH6','NR2F1','NR2F2','ATP2A2','CPNE5')
+sc_meta$gene1 <- as.numeric(seu_obj@assays$RNA@data[genes[1], ])
+p1 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene1 == 0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene1>0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[1], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p2 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene1 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene1>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[1], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene2 <- as.numeric(seu_obj@assays$RNA@data[genes[2], ])
+p3 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene2 == 0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene2>0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[2], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p4 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene2 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene2>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[2], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene3 <- as.numeric(seu_obj@assays$RNA@data[genes[3], ])
+p5 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene3 == 0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene3>0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[3], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p6 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene3 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene3>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[3], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene4 <- as.numeric(seu_obj@assays$RNA@data[genes[4], ])
+p7 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene4 == 0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene4>0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[4], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p8 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene4 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene4>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[4], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene5 <- as.numeric(seu_obj@assays$RNA@data[genes[5], ])
+p9 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene5 == 0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene5>0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[5], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p10 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '8', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene5 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '8'& sc_meta$gene5>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[5], ' (C9)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p3, p5, p7, p9, p2, p4, p6, p8, p10, ncol = 5)
+```
+
+
+```{r fig.height = 4, fig.width = 12, fig.align = 'center'}
+# C12
+genes <- c('MYOZ2','SMPX','FABP3','FITM1','PLN')
+sc_meta$gene1 <- as.numeric(seu_obj@assays$RNA@data[genes[1], ])
+p1 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene1 == 0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene1>0, , ],mapping = aes(tsne1, tsne2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[1], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p2 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene1 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene1>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene1)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[1], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene2 <- as.numeric(seu_obj@assays$RNA@data[genes[2], ])
+p3 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene2 == 0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene2>0, , ],mapping = aes(tsne1, tsne2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[2], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p4 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene2 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene2>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene2)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[2], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene3 <- as.numeric(seu_obj@assays$RNA@data[genes[3], ])
+p5 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene3 == 0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene3>0, , ],mapping = aes(tsne1, tsne2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[3], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p6 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene3 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene3>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene3)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[3], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene4 <- as.numeric(seu_obj@assays$RNA@data[genes[4], ])
+p7 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene4 == 0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene4>0, , ],mapping = aes(tsne1, tsne2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[4], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p8 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene4 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene4>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene4)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[4], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sc_meta$gene5 <- as.numeric(seu_obj@assays$RNA@data[genes[5], ])
+p9 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene5 == 0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene5>0, , ],mapping = aes(tsne1, tsne2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('t-SNE: ', genes[5], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+p10 <- ggplot(sc_meta) +
+  geom_point(sc_meta[sc_meta$scSpace != '11', ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene5 == 0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+    geom_point(sc_meta[sc_meta$scSpace == '11'& sc_meta$gene5>0, , ],mapping = aes(pseudo_space1, pseudo_space2, color=gene5)) +
+  scale_color_gradient(low = 'grey90', high = 'blue') +
+  theme_classic() +
+  ggtitle(paste0('Pseudo space: ', genes[5], ' (C12)')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p3, p5, p7, p9, p2, p4, p6, p8, p10, ncol = 5)
+```
+
+### Increasing the cluster resolution of Seurat  
+```{r}
+seu_obj$n14 <- seu_obj$seurat_clusters
+# 15 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.445)
+seu_obj$n15 <- seu_obj$seurat_clusters
+# 16 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.45)
+seu_obj$n16 <- seu_obj$seurat_clusters
+# 17 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.6)
+seu_obj$n17 <- seu_obj$seurat_clusters
+# 18 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.7)
+seu_obj$n18 <- seu_obj$seurat_clusters
+# 19 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.9)
+seu_obj$n19 <- seu_obj$seurat_clusters
+# 20 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 0.97)
+seu_obj$n20 <- seu_obj$seurat_clusters
+# 21 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 1)
+seu_obj$n21 <- seu_obj$seurat_clusters
+# 22 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 1.4)
+seu_obj$n22 <- seu_obj$seurat_clusters
+# 23 clusters
+seu_obj <- FindClusters(seu_obj, resolution = 1.5)
+seu_obj$n23 <- seu_obj$seurat_clusters
+```
+
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+sc_meta <- seu_obj@meta.data
+sc_meta$tsne1 <- seu_obj@reductions$tsne@cell.embeddings[, 1]
+sc_meta$tsne2 <- seu_obj@reductions$tsne@cell.embeddings[, 2]
+card_meta <- sc_meta[sc_meta$tsne1 >= (-7 - 20) & sc_meta$tsne1 < (-7 + 20)
+                     & sc_meta$tsne2 >= (33 - 20) & sc_meta$tsne2 < (33 + 20), ]
+
+p <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = celltype)) +
+  geom_circle(aes(x0=2.5, y0=36, r=6.5), color="black", linetype=2) + 
+  scale_color_manual(values = c('#EF4444', '#A5B4FC', '#10B981')) + 
+  theme_classic() +
+  ggtitle(paste0('Ground truth')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p
+```
+
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+n14_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n14), 3)
+n15_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n15), 3)
+n16_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n16), 3)
+n17_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n17), 3)
+n18_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n18), 3)
+n19_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n19), 3)
+n20_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n20), 3)
+n21_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n21), 3)
+n22_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n22), 3)
+n23_ari <- round(adjustedRandIndex(card_meta$celltype, card_meta$n23), 3)
+
+p1 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n14)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 14 (ARI: ', n14_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n15)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 15 (ARI: ', n15_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n16)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 16 (ARI: ', n16_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n17)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 17 (ARI: ', n17_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p5 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n18)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 18 (ARI: ', n18_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p6 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n19)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 19 (ARI: ', n19_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p7 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n20)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 20 (ARI: ', n20_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p8 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n21)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 21 (ARI: ', n21_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p9 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n22)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 22 (ARI: ', n22_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p10 <- ggplot() +
+  geom_point(card_meta, mapping = aes(tsne1, tsne2, color = n23)) +
+  scale_color_manual(values = c('#10B981', '#A5B4FC', '#EF4444', '#8B5CF6', '#854D0E')) + 
+  theme_classic() +
+  theme(legend.position = 'none') +
+  ggtitle(paste0('N = 23 (ARI: ', n23_ari, ')')) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
+```
+
+
+```{r}
+# the change of ARI as the k increase
+ari_all <- data.frame(
+  value = c(
+    adjustedRandIndex(sc_meta$celltype, sc_meta$scSpace),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n14),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n15),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n16),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n17),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n18),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n19),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n20),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n21),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n22),
+    adjustedRandIndex(sc_meta$celltype, sc_meta$n23),
+    adjustedRandIndex(card_meta$celltype, card_meta$scSpace),
+    adjustedRandIndex(card_meta$celltype, card_meta$n14),
+    adjustedRandIndex(card_meta$celltype, card_meta$n15),
+    adjustedRandIndex(card_meta$celltype, card_meta$n16),
+    adjustedRandIndex(card_meta$celltype, card_meta$n17),
+    adjustedRandIndex(card_meta$celltype, card_meta$n18),
+    adjustedRandIndex(card_meta$celltype, card_meta$n19),
+    adjustedRandIndex(card_meta$celltype, card_meta$n20),
+    adjustedRandIndex(card_meta$celltype, card_meta$n21),
+    adjustedRandIndex(card_meta$celltype, card_meta$n22),
+    adjustedRandIndex(card_meta$celltype, card_meta$n23)),
+  method = c('scSpace', rep('Seurat', 10), 'scSpace', rep('Seurat', 10)),
+  ct_num = c(14, 14:23, 14, 14:23),
+  type = c(rep('Seurat (all)', 11), rep('Seurat (cardiomyocytes)', 11))
+  )
+
+write.csv(df, file = paste0(output_dir, '/ARI_for_different_cluster_numbers.csv'))
+
+```
+
+
+```{r fig.height = 6, fig.width = 8, fig.align = 'center'}
+ari_all$ct_num <- as.factor(ari_all$ct_num)
+
+# ari_all[ari_all$method == 'scSpace' & ari_all$type == 'all celltypes', ]$value
+# 0.7303123
+# ari_all[ari_all$method == 'scSpace' & ari_all$type == 'three cardiomyocytes', ]$value
+# 0.907676
+
+p <- ggplot(ari_all[ari_all$method != 'scSpace', ], 
+       aes(x = ct_num, y = value, color = type, group = type)) +
+  geom_point(size = 3) +
+  geom_line(size = 1) + 
+  geom_hline(yintercept = 0.7303123, linetype=2, size = 1, color = '#F8766D') +
+  geom_hline(yintercept = 0.907676, linetype=2, size = 1, color = '#00BFC4') +
+  annotate(geom="text", x = 8, y = 0.77, label = 'scSpace (all)', colour='#F8766D') +
+  annotate(geom="text", x = 8, y = 0.95, label = 'scSpace (cardiomyocytes)', colour='#00BFC4') +
+  ylim(c(0, 1)) + 
+  ylab('ARI') +
+  xlab('Cluste number') +
+  theme_classic()
+
+p
+
+```
+
+

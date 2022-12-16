@@ -1,0 +1,412 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Sptial analysis of T cell subpopulations in melanoma
+```{r}
+library(Seurat)
+library(ggplot2)
+library(ggthemes)
+library(ggsignif)
+library(cowplot)
+library(dplyr)
+library(ggpubr)
+library(viridis)
+library(cgdsr)
+library(survival)
+library(survminer)
+library(msigdbr)
+library(fgsea)
+library(tidyverse)
+library(spacexr)
+library(scatterpie)
+library(ggrepel)
+```
+
+
+### Load data
+```{r}
+# Ground Truth
+load('../data/melanoma/melanoma.RDS')
+```
+
+### Load custom functions
+```{r}
+source('../scripts/utils.R')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure5'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### Comparing the pseudo space of T subpopulations consturcted from different ST reference
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+sc_meta$scSpace <- sc_meta$Cell_type
+sc_meta[sc_meta$Cell_type == 'T cell', ]$scSpace <- paste0('c', (tcell_scspace_sub$scSpace + 1))
+sc_meta$m1_pseudo_space1 <- m1_pseudo_space[, 1]
+sc_meta$m1_pseudo_space2 <- m1_pseudo_space[, 2]
+sc_meta$m2_pseudo_space1 <- m2_pseudo_space[, 1]
+sc_meta$m2_pseudo_space2 <- m2_pseudo_space[, 2]
+sc_meta[sc_meta$Cell_type != 'T cell' & sc_meta$Cell_type != 'malignant', ]$scSpace <- 'Others'
+
+# calculate distance between T subpopulations and malignant
+sc_sub <- sc_meta[sc_meta$scSpace != 'Others', ]
+m1_dist <- cal_dist(
+  meta = sc_sub, 
+  coord_index = c('m1_pseudo_space1', 'm1_pseudo_space2'),
+  group_by = 'scSpace',
+  selected_type = 'malignant',
+  ignore_select_type = TRUE)
+m2_dist <- cal_dist(
+  meta = sc_sub, 
+  coord_index = c('m2_pseudo_space1', 'm2_pseudo_space2'),
+  group_by = 'scSpace',
+  selected_type = 'malignant',
+  ignore_select_type = TRUE)
+
+# m1 reference
+p1 <- ggplot() +
+  geom_point(sc_meta[sc_meta$scSpace == 'Others', ], mapping = aes(m1_pseudo_space1, m1_pseudo_space2, color = scSpace), size = 2.5, color = 'grey90') +
+  geom_point(sc_meta[sc_meta$Cell_type == 'malignant', ], mapping = aes(m1_pseudo_space1, m1_pseudo_space2, color = scSpace), size = 2.5) +
+  geom_point(sc_meta[sc_meta$Cell_type == 'T cell', ], mapping = aes(m1_pseudo_space1, m1_pseudo_space2, color = scSpace), size = 2.5) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316')) +
+  ggtitle('Pseudo space (m1)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_classic()
+
+m1_dist$group <- factor(m1_dist$group, levels = c('malignant_c5', 'malignant_c4', 'malignant_c2', 'malignant_c1', 'malignant_c3'))
+p2 <- ggplot(data=m1_dist, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#10B981', '#EAB308', '#EF4444', '#3B82F6', '#854D0E')) +
+  geom_signif(comparisons = list(c('malignant_c5', 'malignant_c4'),
+                                 c('malignant_c5', 'malignant_c2'),
+                                 c('malignant_c5', 'malignant_c1'),
+                                 c('malignant_c5', 'malignant_c3')), 
+              test = "wilcox.test", step_increase=0.1) +
+  theme_classic() +
+  ggtitle('Distance to malignant (m1)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# m2 reference
+p3 <- ggplot() +
+  geom_point(sc_meta[sc_meta$scSpace == 'Others', ], mapping = aes(m2_pseudo_space1, m2_pseudo_space2, color = scSpace), size = 2.5, color = 'grey90') +
+  geom_point(sc_meta[sc_meta$Cell_type == 'malignant', ], mapping = aes(m2_pseudo_space1, m2_pseudo_space2, color = scSpace), size = 2.5) +
+  geom_point(sc_meta[sc_meta$Cell_type == 'T cell', ], mapping = aes(m2_pseudo_space1, m2_pseudo_space2, color = scSpace), size = 2.5) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981', '#F97316')) +
+  ggtitle('Pseudo space (m2)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_classic()
+
+
+m2_dist$group <- factor(m2_dist$group, levels = c('malignant_c5', 'malignant_c4', 'malignant_c2', 'malignant_c1', 'malignant_c3'))
+p4 <- ggplot(data=m2_dist, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#10B981', '#EAB308', '#EF4444', '#3B82F6', '#854D0E')) +
+  geom_signif(comparisons = list(c('malignant_c5', 'malignant_c4'),
+                                 c('malignant_c5', 'malignant_c2'),
+                                 c('malignant_c5', 'malignant_c1'),
+                                 c('malignant_c5', 'malignant_c3')), 
+              test = "wilcox.test", step_increase=0.1) +
+  theme_classic() +
+  ggtitle('Distance to malignant (m2)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p2, p3, p4)
+
+```
+
+### Compared with Seurat
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+tcell_meta <- sc_meta[sc_meta$Cell_type == 'T cell', ]
+tcell_data <- sc_data[, rownames(tcell_meta)]
+
+# run seurat
+sc_obj <- run_Seurat(sc_meta = tcell_meta,
+                     sc_data = tcell_data,
+                     res = 0.36)
+
+p1 <- DimPlot(sc_obj, pt.size = 1.5, group.by = 'scSpace', cols = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981'))
+p2 <- VlnPlot(sc_obj, group.by = 'scSpace', features = c('TK1', 'AURKB', 'BIRC5', 'KIFC1', 'MKI67'), pt.size = 0, cols = c('#3B82F6', '#EF4444', '#854D0E', '#EAB308', '#10B981'))
+p3 <- DimPlot(sc_obj, pt.size = 1.5, group.by = 'seurat_clusters', cols = c('#EF4444', '#3B82F6', '#10B981', '#EAB308', '#854D0E'))
+p4 <- VlnPlot(sc_obj, group.by = 'seurat_clusters', features = c('TK1', 'AURKB', 'BIRC5', 'KIFC1', 'MKI67'), pt.size = 0, cols = c('#EF4444', '#3B82F6', '#10B981', '#EAB308', '#854D0E'))
+
+cowplot::plot_grid(p1, p2, p3, p4)
+
+```
+
+### RCTD results of m1 / m2 ST reference
+```{r fig.height = 5, fig.width = 10, fig.align = 'center'}
+st_m1 <- CreateSeuratObject(m1_st_data, meta.data = m1_st_meta)
+st_m1 <- NormalizeData(st_m1)
+st_m2 <- CreateSeuratObject(m2_st_data, meta.data = m2_st_meta)
+st_m2 <- NormalizeData(st_m2)
+
+
+sc_meta[sc_meta$Cell_type == 'T cell', ]$Cell_type <- sc_meta[sc_meta$Cell_type == 'T cell', ]$scSpace
+res1 <- run_RCTD(sc_meta = sc_meta, sc_data = sc_data, st_meta = m1_st_meta, st_data = st_m1@assays$RNA@data, celltype_index = 'Cell_type')
+res2 <- run_RCTD(sc_meta = sc_meta, sc_data = sc_data, st_meta = m2_st_meta, st_data = st_m2@assays$RNA@data, celltype_index = 'Cell_type')
+
+res1$xcoord <- m1_st_meta[rownames(res1), ]$xcoord
+res1$ycoord <- m1_st_meta[rownames(res1), ]$ycoord
+res2$xcoord <- m2_st_meta[rownames(res2), ]$xcoord
+res2$ycoord <- m2_st_meta[rownames(res2), ]$ycoord
+
+write.csv(res1, file = paste0(output_dir, '/RCTD_m1.csv'))
+write.csv(res1, file = paste0(output_dir, '/RCTD_m2.csv'))
+
+colors = c('grey90', '#3B82F6', "#EF4444", "#854D0E", "#EAB308", "#10B981", 'grey90', 'grey90', 'grey90', 
+           '#F97316', 'grey90')
+
+
+p1 <- ggplot() +
+  geom_scatterpie(
+    aes(ycoord, xcoord, r=0.5),
+    data = res1, cols = colnames(res1)[1:(ncol(res1) - 2)],
+    size = 7, color =NA) +
+  scale_fill_manual(values = colors) + 
+  coord_fixed() +
+  theme_classic()
+
+p2 <- ggplot() +
+  geom_scatterpie(
+    aes(ycoord, xcoord, r=0.5),
+    data = res2, cols = colnames(res1)[1:(ncol(res1) - 2)],
+    size = 7, color =NA) +
+  scale_fill_manual(values = colors) + 
+  coord_fixed() +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### C3, C5, and malignant proportions
+```{r fig.height = 6, fig.width = 10, fig.align = 'center'}
+p1 <- ggplot(res1) +
+  geom_point(aes(ycoord, xcoord, color = malignant), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('malignant (m1)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(res1) +
+  geom_point(aes(ycoord, xcoord, color = c5), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('C5 (m1)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(res1) +
+  geom_point(aes(ycoord, xcoord, color = c3), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('C3 (m1)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(res2) +
+  geom_point(aes(ycoord, xcoord, color = malignant), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('malignant (m2)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p5 <- ggplot(res2) +
+  geom_point(aes(ycoord, xcoord, color = c5), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('C5 (m2)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p6 <- ggplot(res2) +
+  geom_point(aes(ycoord, xcoord, color = c3), size = 2) +
+  scale_color_viridis() +
+  coord_fixed() +
+  theme_classic() +
+  ggtitle('C3 (m2)') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p2, p3, p4, p5, p6)
+
+```
+
+### DEGs between C3 and C5 (volcano plot)
+```{r fig.height = 6, fig.width = 8, fig.align = 'center'}
+Idents(sc_obj) <- 'scSpace'
+markers <- FindMarkers(sc_obj, ident.1 = 'c5', ident.2 = 'c3', logfc.threshold = 0, min.pct = 0)
+markers$gene <- rownames(markers)
+
+write.csv(markers, file = paste0(output_dir, '/DEGs_between_C3_C5.csv'))
+
+markers$logp <- -log10(markers$p_val_adj)
+markers$group <- 'no_sig'
+markers$group[which((markers$p_val_adj < 0.05) & (markers$avg_log2FC > 1))] <- 'up'
+markers$group[which((markers$p_val_adj < 0.05) & (markers$avg_log2FC < -1))] <- 'down'
+select_gene <- c('IL7R', 'TCF7', 'C3orf33', 'TK1', 'AURKB', 'BIRC5', 'KIFC1', 'MKI67', 
+                 'NME1', 'CDK1', 'TYMS', 'MCM2', 'TPX2', 'TOP2A')
+markers$anno <- NA
+markers[markers$gene %in% select_gene, ]$anno <- markers[markers$gene %in% select_gene, ]$gene
+
+p <- ggscatter(markers, x = 'avg_log2FC', y = 'logp', color = 'group', palette = c('#2f5688', 'grey80', '#CC0000'), size = 1.5) +
+  geom_text_repel(aes(label=anno)) +
+  theme_classic() +
+  geom_hline(yintercept = 1.30, linetype = 'dashed') +
+  geom_vline(xintercept = c(-1, 1), linetype = 'dashed')
+p
+```
+
+### DEGs between C3 and C5 (heatmap)
+```{r fig.height = 6, fig.width = 8, fig.align = 'center'}
+c5_genes <- c(markers[order(markers$avg_log2FC, decreasing = TRUE), ]$gene[1:20], 'CDK2')
+c3_genes <- c(markers[order(markers$avg_log2FC, decreasing = FALSE), ]$gene[1:20])
+sc_obj_sub <- subset(sc_obj, idents = c('c3', 'c5'))
+DoHeatmap(sc_obj_sub, features = c(c3_genes, c5_genes), group.colors = c("#854D0E", "#10B981"))
+```
+
+
+### Calculate T exhaustion score
+```{r fig.height = 5, fig.width = 10, fig.align = 'center'}
+exhaustion_gene <- c('HAVCR2','PDCD1','ENTPD1','TNFRSF9','CCL3','PHLDA1','SIRPG',
+                     'CTLA4','TIGIT','SNAP47','WARS','CD27','RGS1','TNFRSF1B',
+                     'CD27-AS1','ACP5','AFAP1L2','MYO7A','AKAP5','ENTPD1-AS1',
+                     'ADGRG1','TOX','LAYN','CD38','ITGAE','RGS2','CCND2','FKBP1A',
+                     'MTHFD1','GALM','CSF1','SNX9','ICOS','LYST','MIR155HG','TPI1',
+                     'SARDH','GZMB','CREM','HLA-DMA','PRDM1','PKM','MYO1E','FUT8','DUSP4','RAB27A',
+                     'HLA-DRA','UBE2F-SCLY','IGFLR1','CXCL13','IFNG','UBE2F','ITM2A',
+                     'ID3','CD2BP2','CHST12','CTSD','STAT3','BST2','CXCR6','RALGDS',
+                     'VCAM1','TRAFD1','SYNGR2','VAPA','IFI35','CD63','NAB1','PARK7',
+                     'MIR4632','YARS','PRKAR1A','IL2RB','DFNB31','HMGN3','MTHFD2',
+                     'NDFIP2','PRF1','PRDX5','LAG3','MS4A6A','LINC00299')
+
+exhaustion_sig <- list(intersect(rownames(sc_obj_sub), exhaustion_gene))
+sc_obj_sub <- AddModuleScore(sc_obj_sub, features = exhaustion_sig, name = 'exhaustion_score')
+
+p1 <- FeaturePlot(sc_obj_sub, features = 'exhaustion_score1', reduction = 'tsne', cols = viridis(9), pt.size = 2.5)
+
+exhaustion_plot <- data.frame(score = sc_obj_sub$exhaustion_score1,
+                              group = as.character(sc_obj_sub$scSpace))
+
+p2 <- ggplot(data=exhaustion_plot, aes(x=group, y=score, fill=group)) +
+  geom_boxplot() +
+  theme_classic() +
+  scale_fill_manual(values = c('#854D0E','#10B981')) +
+  geom_signif(comparisons = list(c("c3","c5")),
+              map_signif_level=F,
+              textsize=6,test=wilcox.test,step_increase=0.2)
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+
+### GSEA 
+```{r fig.height = 6, fig.width = 10, fig.align = 'center'}
+m_df <- msigdbr(species = "Homo sapiens", category = "H")
+fgsea_sets <- m_df %>% split(x = .$gene_symbol, f = .$gs_name)
+c5_genes <- markers %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene, avg_log2FC)
+ranks <- deframe(c5_genes)
+fgseaRes <- fgsea(fgsea_sets, stats = ranks, nperm = 10000)
+fgseaRes_rep <- data.frame(fgseaRes[, c(1:7)])
+write.csv(fgseaRes_rep, file = paste0(output_dir, '/GSEA_result.csv'))
+
+p1 <- plotEnrichment_new(fgsea_sets[["HALLMARK_E2F_TARGETS"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('E2F TARGETS') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- plotEnrichment_new(fgsea_sets[["HALLMARK_OXIDATIVE_PHOSPHORYLATION"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('OXIDATIVE PHOSPHORYLATION') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- plotEnrichment_new(fgsea_sets[["HALLMARK_G2M_CHECKPOINT"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('G2M CHECKPOINT') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- plotEnrichment_new(fgsea_sets[["HALLMARK_DNA_REPAIR"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('DNA REPAIR') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p5 <- plotEnrichment_new(fgsea_sets[["HALLMARK_MYC_TARGETS_V1"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('MYC TARGETS V1') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p6 <- plotEnrichment_new(fgsea_sets[["HALLMARK_MITOTIC_SPINDLE"]], ranks,  ticksSize=0.5) +
+  theme_classic() + 
+  ggtitle('MITOTIC SPINDLE') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+cowplot::plot_grid(p1, p2, p3, p4, p5, p6)
+```
+
+### Survival analysis 
+```{r fig.height = 12, fig.width = 10, fig.align = 'center'}
+mycgds <- CGDS('http://www.cbioportal.org/')
+all_tcga_studies <- getCancerStudies(mycgds)
+skcm_2015 <- 'skcm_tcga'
+mycaselist <- getCaseLists(mycgds, skcm_2015)[6,1]
+mygeneticprofile <- getGeneticProfiles(mycgds,skcm_2015)[7,1]
+
+choose_genes <- c('TK1', 'KIFC1', 'AURKB', 'BIRC5', 'MKI67', 'TPX2', 'NME1', 'CDK2')
+expr <- getProfileData(mycgds, choose_genes, mygeneticprofile, mycaselist)
+clinicaldata <- getClinicalData(mycgds, mycaselist)
+dat <- clinicaldata[clinicaldata$OS_MONTHS > 0, ]
+dat <- cbind(clinicaldata[, c('OS_STATUS', 'OS_MONTHS')], expr[rownames(clinicaldata), ])
+dat <- dat[dat$OS_MONTHS > 0, ]
+dat <- dat[!is.na(dat$OS_STATUS), ]
+dat$OS_STATUS <- as.character(dat$OS_STATUS)
+dat[, -(1:2)] <- apply(dat[, -(1:2)], 2, function(x){ifelse(x > as.numeric(quantile(x)[4]), 'high', 'low')})
+attach(dat)
+my.surv <- Surv(dat$OS_MONTHS, dat$OS_STATUS == '1:DECEASED')
+
+# TK1
+kmfit <- survfit(my.surv ~ TK1, data = dat)
+p1 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# KIFC1
+kmfit <- survfit(my.surv ~ KIFC1, data = dat)
+p2 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# AURKB
+kmfit <- survfit(my.surv ~ AURKB, data = dat)
+p3 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# BIRC5
+kmfit <- survfit(my.surv ~ BIRC5, data = dat)
+p4 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# MKI67
+kmfit <- survfit(my.surv ~ MKI67, data = dat)
+p5 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# TPX2
+kmfit <- survfit(my.surv ~ TPX2, data = dat)
+p6 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# NME1
+kmfit <- survfit(my.surv ~ NME1, data = dat)
+p7 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+# CDK2
+kmfit <- survfit(my.surv ~ CDK2, data = dat)
+p8 <- ggsurvplot(kmfit, conf.int = FALSE, pval = TRUE, risk.table = FALSE,
+                 ncensor.plot = FALSE, palette = c('red','blue'))
+
+cowplot::plot_grid(p1$plot, p2$plot, p3$plot, p4$plot, p5$plot, p6$plot, p7$plot, p8$plot)
+```
+
+

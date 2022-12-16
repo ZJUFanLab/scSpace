@@ -1,0 +1,171 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Benckmark scSpace with other methods on 140 simulated datasets
+```{r}
+library(ggplot2)
+library(ggthemes)
+library(ggsignif)
+library(mclust)
+library(RColorBrewer)
+```
+
+
+### Load data
+```{r}
+# Ground Truth
+sim_gt <- readRDS('../data/simulation/sim_groundtruth.RDS')
+# scSpace
+sim_scspace <- readRDS('../data/simulation/sim_scSpace.RDS')
+# Louvain
+sim_louvain <- readRDS('../data/simulation/sim_louvain.RDS')
+# K-means
+sim_kmeans <- readRDS('../data/simulation/sim_kmeans.RDS')
+# Hierarchical clustering
+sim_hclust <- readRDS('../data/simulation/sim_hclust.RDS')
+# scCoGAPS
+sim_sccogaps <- readRDS('../data/simulation/sim_scCoGAPS.RDS')
+# DR.SC
+sim_drsc <- readRDS('../data/simulation/sim_DRSC.RDS')
+# BayesSpace
+sim_bayesspace <- readRDS('../data/simulation/sim_BayesSpace.RDS')
+# SpaGCN
+sim_spagcn <- readRDS('../data/simulation/sim_SpaGCN.RDS')
+# STAGATE
+sim_stagate <- readRDS('../data/simulation/sim_STAGATE.RDS')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure1'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### Calculate ARI of all celltypes
+```{r}
+all_res <- data.frame()
+for (i in 1:140) {
+  scspace_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_scspace[[i]]$scSpace)
+  louvain_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_louvain[[i]]$louvain)
+  kmeans_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_kmeans[[i]]$kmeans)
+  hclust_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_hclust[[i]]$hclust)
+  sccogaps_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_sccogaps[[i]]$scCoGAPS)
+  drsc_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_drsc[[i]]$spatial.drsc.cluster)
+  bayesspace_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_bayesspace[[i]]$spatial.cluster)
+  spagcn_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_spagcn[[i]]$SpaGCN)
+  stagate_tmp <- adjustedRandIndex(sim_gt[[i]]$Group, sim_stagate[[i]]$STAGATE)
+  
+  res_tmp <- data.frame(
+    simulation = names(sim_gt)[i],
+    ARI = c(scspace_tmp, louvain_tmp, kmeans_tmp, hclust_tmp, sccogaps_tmp,
+            drsc_tmp, bayesspace_tmp, spagcn_tmp, stagate_tmp),
+    method = c('scSpace', 'louvain', 'kmeans', 'hclust', 'scCoGAPS', 
+               'DR.SC', 'BayesSpace', 'SpaGCN', 'STAGATE')
+    )
+  
+  all_res <- rbind(all_res, res_tmp)
+}
+
+write.csv(all_res, file = paste0(output_dir, '/all_res.csv'))
+```
+
+### Plot boxplot of ARI for all celltypes
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+all_res$method <- factor(all_res$method, levels = c('scSpace', 'louvain', 'kmeans', 'STAGATE', 'BayesSpace', 'DR.SC', 'scCoGAPS', 'SpaGCN', 'hclust'))
+
+p <- ggplot(all_res, aes(method, ARI, fill = method)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c('#984EA3', '#4DAF4A', '#377EB8', '#FFFF33','#A65628', 
+                               '#F781BF', '#10B981', '#999999', '#E41A1C')) +
+  theme_classic() +
+  geom_signif(
+    comparisons = list(c('scSpace', 'louvain'),c('scSpace', 'kmeans'), c('scSpace', 'STAGATE'),
+                       c('scSpace', 'BayesSpace'), c('scSpace', 'DR.SC'),c('scSpace', 'scCoGAPS'),
+                       c('scSpace', 'SpaGCN'), c('scSpace', 'hclust')), 
+    test = 'wilcox.test',
+    step_increase = 0.1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5))
+
+p
+```
+
+### Calculate ARI of all celltypes
+```{r}
+sub_res <- data.frame()
+for (i in 1:140) {
+  
+  if(i %in% c(1, 4, 7, 11, 14, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47)){
+    subcluster_num <- 2
+  } else if(i %in% c(2, 5, 8, 9, 12, 15, 18, 19, 22, 25, 28, 29, 32, 35, 38, 39, 42, 45, 48, 49)){
+    subcluster_num <- 3
+  } else if(i %in% c(3, 6, 10, 13, 16, 20, 23, 26, 30, 33, 36, 40, 43, 46, 50)){
+    subcluster_num <- 4
+  } else if(i %in% c(51:65)){
+    subcluster_num <- 5
+  } else if(i %in% c(66:80)){
+    subcluster_num <- 6
+  } else if(i %in% c(81:95)){
+    subcluster_num <- 7
+  } else if(i %in% c(96:110)){
+    subcluster_num <- 8
+  } else if(i %in% c(111:125)){
+    subcluster_num <- 9
+  } else if(i %in% c(126:140)){
+    subcluster_num <- 10
+  }
+  
+  cluster_num <- length(unique(sim_gt[[i]]$Group))
+  
+  subcluster_name <- paste0('Group', (1 + cluster_num - subcluster_num):cluster_num)
+  
+  
+  scspace_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_scspace[[i]][sim_scspace[[i]]$Group %in% subcluster_name, ]$scSpace)
+  louvain_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_louvain[[i]][sim_louvain[[i]]$Group %in% subcluster_name, ]$louvain)
+  kmeans_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_kmeans[[i]][sim_kmeans[[i]]$Group %in% subcluster_name, ]$kmeans)
+  hclust_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_hclust[[i]][sim_hclust[[i]]$Group %in% subcluster_name, ]$hclust)
+  sccogaps_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_sccogaps[[i]][sim_sccogaps[[i]]$Group %in% subcluster_name, ]$scCoGAPS)
+  drsc_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_drsc[[i]][sim_drsc[[i]]$Group %in% subcluster_name, ]$spatial.drsc.cluster)
+  bayesspace_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_bayesspace[[i]][sim_bayesspace[[i]]$Group %in% subcluster_name, ]$spatial.cluster)
+  spagcn_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_spagcn[[i]][sim_spagcn[[i]]$Group %in% subcluster_name, ]$SpaGCN)
+  stagate_tmp <- adjustedRandIndex(sim_gt[[i]][sim_gt[[i]]$Group %in% subcluster_name, ]$Group, sim_stagate[[i]][sim_stagate[[i]]$Group %in% subcluster_name, ]$STAGATE)
+  
+  res_tmp <- data.frame(
+    simulation = names(sim_gt)[i],
+    subcluster_num = subcluster_num,
+    ARI = c(scspace_tmp, louvain_tmp, kmeans_tmp, hclust_tmp, sccogaps_tmp,
+            drsc_tmp, bayesspace_tmp, spagcn_tmp, stagate_tmp),
+    method = c('scSpace', 'louvain', 'kmeans', 'hclust', 'scCoGAPS', 
+               'DR.SC', 'BayesSpace', 'SpaGCN', 'STAGATE')
+    )
+  
+  sub_res <- rbind(sub_res, res_tmp)
+}
+
+write.csv(sub_res, file = paste0(output_dir, '/sub_res.csv'))
+```
+
+### Plot boxplot of ARI for spatial subclusters
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+sub_res$method <- factor(sub_res$method, levels = c('scSpace', 'louvain', 'kmeans', 'STAGATE', 'BayesSpace', 'DR.SC', 'scCoGAPS', 'SpaGCN', 'hclust'))
+
+p <- ggplot(sub_res, aes(as.factor(subcluster_num), ARI, fill = method)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c('#984EA3', '#4DAF4A', '#377EB8', '#FFFF33','#A65628', 
+                               '#F781BF', '#10B981', '#999999', '#E41A1C')) +
+  theme_classic()
+
+p
+```
+
+
+
+
+
+
+

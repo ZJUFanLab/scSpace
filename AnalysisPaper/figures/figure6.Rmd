@@ -1,0 +1,509 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Sptial analysis of the invasion of myeloid subpopulations in COVID-19
+```{r}
+library(GSVA)
+library(Seurat)
+library(ggplot2)
+library(ggthemes)
+library(ggsignif)
+library(ggforce)
+library(dplyr)
+library(reshape2)
+library(ggbeeswarm)
+library(cowplot)
+library(limma)
+library(viridis)
+library(ggpubr)
+library(pheatmap)
+```
+
+
+### Load data
+```{r}
+# Ground Truth
+load('../data/covid19/covid19.RDS')
+```
+
+### Load custom functions
+```{r}
+source('../scripts/utils.R')
+```
+
+### Set output dir
+```{r}
+output_dir <- '../output/figure6'
+if(!dir.exists(output_dir)){
+  dir.create(output_dir)
+} else {
+  print('Dir already exists!')
+}
+```
+
+### scRNA-seq overview
+```{r fig.height = 5, fig.width = 10, fig.align = 'center'}
+sc_seu <- run_Seurat(sc_meta = sc_meta, sc_data = sc_data, res = 1)
+tsne_obj <- sc_seu@meta.data
+tsne_obj$tsne1 <- sc_seu@reductions$tsne@cell.embeddings[, 1]
+tsne_obj$tsne2 <- sc_seu@reductions$tsne@cell.embeddings[, 2]
+
+p1 <- ggplot() +
+  geom_point(tsne_obj, mapping = aes(tsne1,tsne2,color = cell_type_main), size = 2) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#8B5CF6', '#10B981', '#F97316', 
+                                '#84CC16', '#854D0E', '#EAB308', '#D946EF')) +
+  theme_classic() +
+  theme(legend.title = element_blank())
+
+p2 <- ggplot() +
+  geom_point(tsne_obj, mapping = aes(tsne1,tsne2,color = group), size = 2) +
+  scale_color_manual(values =c('#A5B4FC', '#F97316')) +
+  theme_classic() +
+  theme(legend.title = element_blank())
+
+cowplot::plot_grid(p1, p2)
+```
+
+### Pseudo space of scRNA-seq
+```{r fig.height = 8, fig.width = 10, fig.align = 'center'}
+sc_meta$pseudo_space1 <- pseudo_coords[,1]
+sc_meta$pseudo_space2 <- pseudo_coords[,2]
+sc_meta$cell_type_main_rep <- sc_meta$cell_type_main
+sc_meta[sc_meta$cell_type_main_rep %in% 
+          c('APC-like', 'B cells', 'Endothelial cells', 'Fibroblasts', 
+            'Mast cells', 'Neuronal cells', 'T cells'), ]$cell_type_main_rep <- 'others'
+
+
+p1 <- ggplot() +
+  geom_point(sc_meta[sc_meta$group == 'Control', ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main), size = 3) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#8B5CF6', '#10B981', '#F97316', 
+                                '#84CC16', '#854D0E', '#EAB308', '#D946EF')) +
+  theme_classic() + 
+  ggtitle('Pseudo space (Control)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank()) 
+
+p2 <- ggplot() +
+  geom_point(sc_meta[sc_meta$group == 'COVID-19', ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main), size = 3) +
+  scale_color_manual(values = c('#EF4444', '#3B82F6', '#8B5CF6', '#10B981', '#F97316', 
+                                '#84CC16', '#854D0E', '#EAB308', '#D946EF')) +
+  theme_classic() +
+  ggtitle('Pseudo space (COVID-19)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+
+p3 <- ggplot() +
+  geom_point(sc_meta[sc_meta$group == 'Control' & (sc_meta$cell_type_main_rep == 'others'), ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main_rep), size = 3) +
+  geom_point(sc_meta[sc_meta$group == 'Control' & (sc_meta$cell_type_main_rep != 'others'), ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main_rep), size = 3) +
+  scale_color_manual(values = c('#10B981', '#854D0E', 'grey90')) +
+  theme_classic() +
+  ggtitle('Pseudo space (Control)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank()) 
+
+p4 <- ggplot() +
+  geom_point(sc_meta[sc_meta$group == 'COVID-19' & (sc_meta$cell_type_main_rep == 'others'), ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main_rep), size = 3) +
+  geom_point(sc_meta[sc_meta$group == 'COVID-19' & (sc_meta$cell_type_main_rep != 'others'), ], 
+             mapping = aes(pseudo_space1, pseudo_space2, color = cell_type_main_rep), size = 3) +
+  scale_color_manual(values = c('#10B981', '#854D0E', 'grey90')) +
+  theme_classic() +
+  ggtitle('Pseudo space (COVID-19)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+
+cowplot::plot_grid(p1, p2, p3, p4)
+
+```
+
+### Calculate distance between Myeloid cells and Alveolar/Airway Epithelial cells of Control and COVID-19 groups
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+sc_meta$celltype <- sc_meta$cell_type_fine
+sc_meta[sc_meta$cell_type_main == 'T cells', ]$celltype <- 'T cells'
+sc_meta[sc_meta$cell_type_main == 'Endothelial cells', ]$celltype <- 'Endothelial cells'
+sc_meta[sc_meta$cell_type_main == 'B cells', ]$celltype <- 'B cells'
+sc_meta[sc_meta$cell_type_main == 'Fibroblasts', ]$celltype <- 'Fibroblasts'
+sc_meta[sc_meta$celltype %in% c('AT1', 'AT2'), ]$celltype <- 'alveolar epithelial cells'
+sc_meta[sc_meta$celltype %in% c('Airway basal', 'Airway ciliated', 'Airway club', 
+                                'Airway goblet', 'Airway mucous', 'Tuft-like'), ]$celltype <- 'airway epithelial cells'
+
+sc_meta$celltype1 <- sc_meta$celltype
+sc_meta[sc_meta$celltype1 %in% c('Monocyte-derived macrophages', 'Monocytes', 
+                                 'Alveolar macrophages', 'Transitioning MDM') ,]$celltype1 <- 'Myeloid'
+sc_meta[sc_meta$celltype1 %in% c('alveolar epithelial cells', 'airway epithelial cells') ,]$celltype1 <- 'Alveolar/Airway Epithelial'
+
+# calculate pairwise distance
+con_dist <- cal_dist(meta = sc_meta[sc_meta$disease__ontology_label == 'normal' &
+                                      sc_meta$celltype1 %in% c('Alveolar/Airway Epithelial', 'Myeloid'), ],
+                     coord_index = c('pseudo_space1', 'pseudo_space2'),
+                     group_by = 'celltype1',
+                     selected_type = 'Alveolar/Airway Epithelial',
+                     ignore_select_type = TRUE)
+
+cov_dist <- cal_dist(meta = sc_meta[sc_meta$disease__ontology_label == 'COVID-19' &
+                                        sc_meta$celltype1 %in% c('Alveolar/Airway Epithelial', 'Myeloid'), ],
+                     coord_index = c('pseudo_space1', 'pseudo_space2'),
+                     group_by = 'celltype1',
+                     selected_type = 'Alveolar/Airway Epithelial',
+                     ignore_select_type = TRUE)
+
+con_dist$type <- 'Control'
+cov_dist$type <- 'COVID-19'
+
+dist_all <- rbind(con_dist, cov_dist)
+p <- ggplot(data=dist_all, aes(x=type, y=dist, fill=type)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#F97316') )+
+  theme_classic() +
+  ggtitle('Distance between Myeloid and Alveolar/Airway Epithelial') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggsignif::geom_signif(test = 'wilcox.test', comparisons = list(c('COVID-19', 'Control')))
+
+p
+
+```
+
+### Validation using GeoMX DSP data generated by Rendeiro et al. 2021 (doi: 10.1038/s41586-021-03475-6)
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# ssGSEA (doi: 10.1038/s41586-021-03475-6)
+# create cell-type signature gene sets
+Idents(sc_seu) <- 'cell_type_main'
+marker <- FindAllMarkers(sc_seu, only.pos = TRUE, assay = 'RNA', logfc.threshold = 0.5)
+marker <- marker[marker$p_val_adj < 0.05, ] 
+genesets <- list(Fibroblasts=marker[marker$cluster=='Fibroblasts', ]$gene,
+                 Mast=marker[marker$cluster=='Mast cells', ]$gene,
+                 Epithelial=marker[marker$cluster=='Epithelial cells', ]$gene,
+                 Tcells=marker[marker$cluster=='T cells', ]$gene,
+                 Myeloid=marker[marker$cluster=='Myeloid', ]$gene,
+                 Endothelial=marker[marker$cluster=='Endothelial cells', ]$gene,
+                 Bcells=marker[marker$cluster=='B cells', ]$gene,
+                 DC=marker[marker$cluster=='APC-like', ]$gene,
+                 Neuronal=marker[marker$cluster=='Neuronal cells', ]$gene)
+
+# DSP data
+colnames(dsp_data) <- rownames(dsp_meta)
+dsp_meta <-dsp_meta[dsp_meta$disease != 'Non-viral', ]
+dsp_meta[dsp_meta$disease != 'Normal', ]$disease <- 'COVID-19'
+dsp_meta[dsp_meta$disease == 'Normal', ]$disease <- 'Control'
+dsp_data <- dsp_data[, rownames(dsp_meta)]
+dsp_data <- as.matrix(dsp_data)
+# run ssGSEA
+ssgsea_score <- gsva(dsp_data, genesets, method = "ssgsea", ssgsea.norm = TRUE, verbose = TRUE)  
+ssgsea_score <- data.frame(t(ssgsea_score))
+ssgsea_score_plot <- ssgsea_score
+ssgsea_score_plot$disease <- dsp_meta$disease
+ssgsea_score_plot <- melt(ssgsea_score_plot)
+
+p <- ggplot(ssgsea_score_plot[ssgsea_score_plot$variable == 'Myeloid',], 
+            aes(disease, value, color = disease))+
+  geom_boxplot() +
+  geom_beeswarm(aes(fill = disease), shape=21, colour = "black", size = 3, cex = 2)+
+  scale_color_manual(values= c('#A5B4FC', '#F97316')) +
+  scale_fill_manual(values= c('#A5B4FC', '#F97316')) +
+  theme_classic() +
+  ggsignif::geom_signif(comparisons = list(c('Control', 'COVID-19')),
+                        step_increase = 0.3, color = "black", test = 'wilcox.test')
+p
+
+ssgsea_score_plot <- ssgsea_score_plot[ssgsea_score_plot$variable == 'Myeloid', ]
+write.csv(ssgsea_score_plot, file = paste0(output_dir, '/ssGSEA_result.csv'))
+```
+
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# CYBERSORTx
+cybersort_res <- read.csv('../data/covid19/CIBERSORTx_Job1_Results.csv', row.names = 1)
+cybersort_res <- cybersort_res[, 1:9]
+cybersort_res$disease <- dsp_meta[rownames(cybersort_res), ]$disease
+cybersort_res <- melt(cybersort_res)
+
+p <- ggplot(cybersort_res[cybersort_res$variable == 'Myeloid',], 
+            aes(disease, value, color = disease))+
+  geom_boxplot() +
+  geom_beeswarm(aes(fill = disease), shape=21, colour = "black", size = 3, cex = 2)+
+  scale_color_manual(values= c('#A5B4FC', '#F97316')) +
+  scale_fill_manual(values= c('#A5B4FC', '#F97316')) +
+  theme_classic() +
+  ggsignif::geom_signif(comparisons = list(c('Control', 'COVID-19')),
+                        step_increase = 0.3, color = "black", test = 'wilcox.test')
+p
+```
+
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# Calculate the COVID-19 signatures using DSP data
+# limma
+dsp_data <- dsp_data[intersect(rownames(dsp_data), rownames(sc_data)), ]
+list <- dsp_meta$disease %>% factor(., levels = c("Control", "COVID-19"), ordered = F)
+list <- model.matrix(~factor(list) + 0)
+colnames(list) <- c("Control", "COVID")
+df.fit <- lmFit(dsp_data, list)
+df.matrix <- makeContrasts(COVID - Control , levels = list)
+fit <- contrasts.fit(df.fit, df.matrix)
+fit <- eBayes(fit)
+limma_res <- topTable(fit,n = Inf, adjust = "fdr")
+
+# ggscatter
+limma_res_plot <- limma_res
+limma_res_plot$gene <- rownames(limma_res_plot)
+limma_res_plot$logp <- -log10(limma_res_plot$adj.P.Val)
+limma_res_plot$group <- 'no_sig'
+limma_res_plot$group[which((limma_res_plot$adj.P.Val < 0.05) & (limma_res_plot$logFC > 0.5))] <- 'up'
+limma_res_plot$group[which((limma_res_plot$adj.P.Val < 0.05) & (limma_res_plot$logFC < -0.5))] <- 'down'
+p <- ggscatter(limma_res_plot, x = 'logFC', y = 'logp', color = 'group',
+               palette = c('#2f5688', 'grey80', '#CC0000'), size = 2, label = 'gene',
+               label.select = rownames(limma_res)[order(limma_res$logFC, decreasing=TRUE)[1:10]],
+               font.label = c(8, 'plain')) +
+  theme_classic() +
+  geom_hline(yintercept = 1.30, linetype = 'dashed') +
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = 'dashed')
+
+p
+
+write.csv(limma_res_plot, file = paste0(output_dir, '/DSP_limma_result.csv'))
+```
+
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+# Compare the COVID-19 signatures score between Myeloid cells (near to Alveolar/Airway Epithelial) and Myeloid cells (far from Alveolar/Airway Epithelial)
+
+# COVID-19 signatures
+covid19_signatures <- list(rownames(limma_res[limma_res$logFC > 0.5, ]))
+
+# Extract Alveolar/Airway Epithelial cells and Myeloid cells from COVID-19 group
+mye_epi <- sc_meta[sc_meta$celltype %in% c('airway epithelial cells','alveolar epithelial cells') |
+                     sc_meta$celltype1 == 'Myeloid', ]
+mye_epi <- mye_epi[mye_epi$disease__ontology_label == 'COVID-19', ]
+dist_df <- data.frame(as.matrix(dist(mye_epi[, c('pseudo_space1', 'pseudo_space2')])))
+
+# Myeloid to Alveolar/Airway Epithelial (far: distance > median(distance); near: distance <= median(distance))
+dist_df <- dist_df[rownames(mye_epi[mye_epi$celltype1 == 'Myeloid', ]),
+                   rownames(mye_epi[mye_epi$celltype1 == 'Alveolar/Airway Epithelial', ])]
+dist_mean <- apply(dist_df, 1, mean)
+mye_near_to_epi <- names(dist_mean[dist_mean <= median(dist_mean)])
+mye_far_from_epi <- names(dist_mean[dist_mean > median(dist_mean)])
+
+mye_meta <- mye_epi[mye_epi$celltype1 == 'Myeloid', ]
+mye_meta$type <- NA
+mye_meta[mye_near_to_epi, ]$type <- 'Myeloid (Near)'
+mye_meta[mye_far_from_epi, ]$type <- 'Myeloid (Far)'
+
+# Calculate COVID-19 signatures socre
+mye_data <- sc_data[, rownames(mye_meta)]
+seu_obj <- CreateSeuratObject(mye_data, meta.data = mye_meta)
+seu_obj <- AddModuleScore(seu_obj, features = covid19_signatures, name = 'DSP')
+module_score_df <- seu_obj@meta.data
+
+p <- ggplot(data=module_score_df, aes(x=type, y=DSP1, fill=type)) +
+  geom_boxplot(outlier.shape = NA) +
+  theme_classic() +
+  scale_fill_manual(values = c('#E41A1C','#377EB8')) +
+  ggtitle('COVID-19 Signatures Socre') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_signif(comparisons = list(c('Myeloid (Near)', 'Myeloid (Far)')), test = 'wilcox.test')
+p
+```
+
+```{r fig.height = 6, fig.width = 8, fig.align = 'center'}
+# DEGs of Myeloid cells (near to Alveolar/Airway Epithelial)
+Idents(seu_obj) <- 'type'
+p <- VlnPlot(seu_obj, features = c('B2M', 'HLA-A', 'HLA-B', 'HLA-C', 'HLA-DRA', 'HLA-E'), cols = c('#E41A1C', '#377EB8'), pt.size = 0) 
+p
+```
+
+### Calculate distance between Myeloid subclusters and Alveolar/Airway Epithelial cells
+```{r fig.height = 5, fig.width = 10, fig.align = 'center'}
+mye_epi <- sc_meta[sc_meta$celltype %in% c('airway epithelial cells','alveolar epithelial cells') |
+                     sc_meta$celltype1 == 'Myeloid', ]
+mye_epi$celltype2 <- mye_epi$celltype
+mye_epi[mye_epi$celltype1 == 'Alveolar/Airway Epithelial', ]$celltype2 <- 'Alveolar/Airway Epithelial'
+
+# calculate pairwise distance
+con_dist <- cal_dist(meta = mye_epi[mye_epi$disease__ontology_label == 'normal', ],
+                     coord_index = c('pseudo_space1', 'pseudo_space2'),
+                     group_by = 'celltype2',
+                     selected_type = 'Alveolar/Airway Epithelial',
+                     ignore_select_type = TRUE)
+
+cov_dist <- cal_dist(meta = mye_epi[mye_epi$disease__ontology_label == 'COVID-19', ],
+                     coord_index = c('pseudo_space1', 'pseudo_space2'),
+                     group_by = 'celltype2',
+                     selected_type = 'Alveolar/Airway Epithelial',
+                     ignore_select_type = TRUE)
+
+con_dist$type <- 'Control'
+cov_dist$type <- 'COVID-19'
+dist_all <- rbind(con_dist, cov_dist)
+
+dist_all$group <- gsub('Alveolar/Airway Epithelial_', '', dist_all$group)
+dist_all$group <- gsub('Alveolar macrophages', 'AM', dist_all$group)
+dist_all$group <- gsub('Monocyte-derived macrophages', 'MDM', dist_all$group)
+dist_all$group <- gsub('Monocytes', 'Mon', dist_all$group)
+dist_all$group <- gsub('Transitioning MDM', 'TMDM', dist_all$group)
+p1 <- ggplot(data=dist_all, aes(x=group, y=dist, fill=type)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#A5B4FC', '#F97316') )+
+  theme_classic() +
+  ggtitle('Distance between Myeloid subclusters and Alveolar/Airway Epithelial') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggpubr::stat_compare_means(aes(group=type), method = 'wilcox.test')
+
+# distance change ratio between COVID-19 and Control group
+distance_median_control <- aggregate(dist_all[dist_all$type == 'Control', ]$dist, 
+                                     by=list(dist_all[dist_all$type == 'Control', ]$group),median)
+distance_median_coviid19 <- aggregate(dist_all[dist_all$type == 'COVID-19', ]$dist, 
+                                      by=list(dist_all[dist_all$type == 'COVID-19', ]$group),median)
+
+distance_chage_ratio <- data.frame(celltype = distance_median_control$Group.1,
+                                   control_median = distance_median_control$x,
+                                   covid19_median = distance_median_coviid19$x)
+
+distance_chage_ratio$ratio <- (distance_chage_ratio$covid19_median - 
+                                 distance_chage_ratio$control_median) / distance_chage_ratio$control_median
+
+distance_chage_ratio$celltype <- factor(distance_chage_ratio$celltype, levels = c('TMDM', 'MDM', 'AM', 'Mon'))
+
+write.csv(distance_chage_ratio, file = paste0(output_dir, '/Dist_change_ratio.csv'))
+
+p2 <- ggplot(distance_chage_ratio) +
+  geom_bar(aes(celltype, -ratio, fill=celltype, color=celltype), stat = 'identity') +
+  scale_fill_manual(values = c('#8B5CF6', '#3B82F6', '#F97316', '#EAB308')) +
+  scale_color_manual(values = c('black', 'black', 'black', 'black')) +
+  ggtitle('Distance change') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_classic()
+
+cowplot::plot_grid(p1, p2)
+
+```
+
+### TMDM/MDM subclusters analysis
+```{r fig.height = 5, fig.width = 10, fig.align = 'center'}
+sc_meta_mdm <- sc_meta[sc_meta$cell_type_fine == 'Monocyte-derived macrophages' | sc_meta$cell_type_fine == 'Transitioning MDM', ]
+sc_meta_mdm$scSpace <- mdm_meta$scspace
+sc_data_mdm <- sc_data[, rownames(sc_meta_mdm)]
+
+mdm <- run_Seurat(sc_meta = sc_meta_mdm, sc_data = sc_data_mdm, res = 0.35)
+mdm$scSpace <- paste0('C_', (mdm$scSpace + 1))
+mdm$seurat_clusters <- paste0('C_', as.numeric(mdm$seurat_clusters))
+mdm_meta_new <- mdm@meta.data
+mdm_meta_new$tsne1 <- mdm@reductions$tsne@cell.embeddings[, 1]
+mdm_meta_new$tsne2 <- mdm@reductions$tsne@cell.embeddings[, 2]
+
+p1 <- ggplot() +
+  geom_point(mdm_meta_new, mapping = aes(tsne1,tsne2,color = scSpace), size = 3) +
+  scale_color_manual(values = c('#3B82F6', '#EF4444', '#C798EE', '#EAB308', '#F97316', '#854D0E')) +
+  theme_classic() +
+  ggtitle('MDM/TMDM subclusters') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+
+# Calculate distance between MDM/TMDM subclusters and Alveolar/Airway Epithelial
+epi_meta <- sc_meta[sc_meta$celltype %in% c('airway epithelial cells','alveolar epithelial cells'), ]
+dist_df <- data.frame(
+  pseudo_space1 = c(mdm_meta_new$pseudo_space1, epi_meta$pseudo_space1),
+  pseudo_space2 = c(mdm_meta_new$pseudo_space2, epi_meta$pseudo_space2),
+  celltype = c(mdm_meta_new$scSpace, epi_meta$celltype1))
+
+dist_res <- cal_dist(meta = dist_df,
+                     coord_index = c('pseudo_space1', 'pseudo_space2'),
+                     group_by = 'celltype',
+                     selected_type = 'Alveolar/Airway Epithelial',
+                     ignore_select_type = TRUE)
+
+dist_res$group <- gsub('Alveolar/Airway Epithelial_', '', dist_res$group)
+dist_res$group <- factor(dist_res$group, levels = c('C_4', 'C_2', 'C_5', 'C_6', 'C_3', 'C_1'))
+p2 <- ggplot(data=dist_res, aes(x=group, y=dist, fill=group)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_fill_manual(values = c('#EAB308', '#EF4444', '#F97316', '#854D0E', '#C798EE', '#3B82F6')) +
+  theme_classic() +
+  ggtitle('Distance between MDM/TMDM subclusters and Alveolar/Airway Epithelial') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_signif(comparisons = list(c('C_4', 'C_2'), c('C_4', 'C_5'), c('C_4', 'C_6'),
+                                 c('C_4', 'C_3'), c('C_4', 'C_1')), 
+              test = 'wilcox.test', step_increase=0.1)
+  
+cowplot::plot_grid(p1, p2)
+```
+
+### DEGs between MDM/TMDM subclusters
+```{r fig.height = 8, fig.width = 8, fig.align = 'center'}
+Idents(mdm) <- 'scSpace'
+mdm@active.ident <- factor(mdm@active.ident, levels = c('C_1', 'C_2', 'C_3', 'C_4', 'C_5', 'C_6'))
+all_markers <- FindAllMarkers(mdm, assay = 'RNA', only.pos = TRUE, logfc.threshold = 0.5)
+all_markers <- all_markers[all_markers$p_val_adj < 0.05, ]
+
+write.csv(all_markers, file = paste0(output_dir, '/DEGs_between_MDM_subcluster.csv'))
+
+top10 <- all_markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+# heatmap
+DoHeatmap(mdm, features = top10$gene, group.colors = c('#EAB308', '#EF4444', '#F97316', '#854D0E', '#C798EE', '#3B82F6'))
+```
+
+```{r fig.height = 9, fig.width = 6, fig.align = 'center'}
+# Featureplot
+p <- FeaturePlot(mdm, reduction = 'tsne', features = c('F13A1', 'SEMA3C', 'ZNF331', 'MT-ND3', 'HSP90AA1', 'LSAMP'))
+p
+```
+
+### Average expression of MT genes (C4 markers)
+```{r fig.height = 6, fig.width = 6, fig.align = 'center'}
+c4_marker_mito <- c("MT-ND1", "MT-ND4", "MT-CYB", "MT-ATP8", "MT-ND3", "MT-ND5", "MT-ND2", "MT-ATP6", "MT-CO3",
+                    "MT-ND6", "MT-ND4L", "MT-CO2", "MT-CO1")
+gene_to_heatmap <- AverageExpression(mdm, slot = 'count', features = c4_marker_mito)$RNA
+
+write.csv(gene_to_heatmap, file = paste0(output_dir, '/MT_gene_average_expression.csv'))
+
+pheatmap(t(gene_to_heatmap), 
+         cluster_rows = FALSE, 
+         cluster_cols = FALSE,
+         border_color = 'white',
+         color = colorRampPalette(viridis(9))(100),
+         cellwidth = 20,
+         cellheight = 20)
+```
+
+### Average expression of non-MT genes (C4 markers)
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+c4_marker_non_mito <- c("B2M", "APOE", "LNCAROD", "C1QA", "TMSB4X", "NUPR1", "TMEM51", "KCTD12", "RNASE1",
+                        "GRN", "ZBTB1", "SSBP3", "HLA-DRA", "CD74", "FTL", "CEBPD", "EPSTI1", "NLRC5", "ORMDL1",
+                        "SBNO2", "NUDCD3", "CORO2A", "QSOX1", "ST8SIA4", "MAFB", "CTSS", "BTG1", "CLIC4",
+                        "CD14", "CARD8", "NFATC3", "RAPGEF6", "INO80D", "ZNF292", "PIK3AP1")
+gene_to_heatmap <- AverageExpression(mdm, slot = 'count', features = c4_marker_non_mito)$RNA
+
+write.csv(gene_to_heatmap, file = paste0(output_dir, '/non_MT_gene_average_expression.csv'))
+
+pheatmap(t(gene_to_heatmap), 
+         cluster_rows = FALSE, 
+         cluster_cols = FALSE,
+         border_color = 'white',
+         color = colorRampPalette(viridis(9))(100),
+         cellwidth = 15,
+         cellheight = 15)
+```
+
+### non-MT genes highly expressed in C4 (MHC I class genes)
+```{r fig.height = 4, fig.width = 6, fig.align = 'center'}
+p <- VlnPlot(mdm, features = c('B2M', 'HLA-DRA', 'CD74', 'CTSS'), 
+             pt.size = 0, cols = c('#3B82F6', '#EF4444', '#C798EE', '#EAB308', '#F97316', '#854D0E'))
+p
+```
+
+### MDM/TMDM subclusters analysis using Seurat
+```{r fig.height = 4, fig.width = 10, fig.align = 'center'}
+p1 <- ggplot() +
+  geom_point(mdm_meta_new, mapping = aes(tsne1,tsne2,color = seurat_clusters), size = 3) +
+  scale_color_manual(values = c('#EAB308', '#EF4444', '#3B82F6', '#C798EE', '#F97316', '#854D0E')) +
+  theme_classic() +
+  ggtitle('MDM/TMDM subclusters (Seurat)') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+
+p2 <- VlnPlot(mdm, features = c('B2M', 'HLA-DRA', 'CD74', 'CTSS'), group.by = 'seurat_clusters', pt.size=0, cols = c('#EAB308', '#EF4444', '#3B82F6', '#C798EE', '#F97316', '#854D0E'))
+
+cowplot::plot_grid(p1, p2)
+
+```
