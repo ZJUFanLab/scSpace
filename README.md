@@ -43,9 +43,9 @@ in the [vignettes/data folder](vignettes/data) of this repository as examples to
 ## Tutorials
 Additional step-by-step tutorials now available! Preprocessed datasets used can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1a0dPYYFITrhmMhSeNc1HSWLfx6-bDy65?usp=sharing).
 
-1. [Demonstration of scSpace on simulated data](vignettes/demo_data.md)
+1. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/intestines.ipynb)
 
-2. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/mouse_intestines_analysis.md)
+2. [Spatial analysis of T cells subpopulations in melanoma](vignettes/melanoma.ipynb)
 
 3. [Spatial analysis of the invasion of myeloid subpopulations in Covid-19](vignettes/covid19_snalysis.md)
 
