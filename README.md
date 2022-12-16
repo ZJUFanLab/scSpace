@@ -45,7 +45,9 @@ Additional step-by-step tutorials now available! Preprocessed datasets used can 
 
 1. [Spatial reconstruction of mouse intestine scRNA-seq data](vignettes/intestines.ipynb)
 
-2. [Spatial analysis of the invasion of myeloid subpopulations in Covid-19](vignettes/covid19_snalysis.md)
+2. [Spatial analysis of T cells subpopulations in melanoma](vignettes/melanoma.ipynb)
+
+3. [Spatial analysis of the invasion of myeloid subpopulations in Covid-19](vignettes/covid19_snalysis.md)
 
 ## About
 scSpace was developed by Jie Liao and Jingyang Qian. Should you have any questions, please contact Jie Liao at liaojie@zju.edu.cn, or Jingyang Qian at qianjingyang@zju.edu.cn
