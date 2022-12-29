@@ -184,7 +184,7 @@ def get_data_loader(
     dataloader = DataLoader(
         dataset=MyDataset(data=data, label=label),
         batch_size=batch_size,
-        shuffle=True)
+        shuffle=False)
 
     return dataloader
 
