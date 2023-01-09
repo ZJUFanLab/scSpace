@@ -22,10 +22,4 @@ the results consistent with the figures can be accessed [here](output):
 * [Application of scSpace on human melanoma scRNA-seq data](https://raw.githack.com/ZJUFanLab/scSpace/master/AnalysisPaper/figures/figure5.html) (Figure 5)
 * [Application of scSpace on human COVID-19 scRNA-seq data](https://raw.githack.com/ZJUFanLab/scSpace/master/AnalysisPaper/figures/figure6.html) (Figure 6)
 
-## Supplementary Figures
-TODO:
-* [Figure S1]()
-* [Figure S2]()
-* [Figure S3]()
-* [Figure S4]()
-* [Figure S5]() 
+
