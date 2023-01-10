@@ -8,7 +8,7 @@ scSpace (<u>**s**</u>ingle-<u>**c**</u>ell and <u>**s**</u>patial <u>**p**</u>os
 
 ![avatar](images/workflow.jpg)
 
-Code for generating the figures in this study can be found [here](AnalysisPaper)
+Code for generating the figures in this study can be found [here](AnalysisPaper).
 
 ## Requirements and Installation
 [![numpy 1.23.4](https://img.shields.io/badge/numpy-1.23.4-green)](https://pypi.org/project/numpy/) [![pandas 1.5.0](https://img.shields.io/badge/pandas-1.5.0-yellowgreen)](https://pypi.org/project/pandas/) [![scikit-learn 1.1.2](https://img.shields.io/badge/scikit--learn-1.1.2-yellow)](https://pypi.org/project/scikit-learn/) [![scipy 1.9.2](https://img.shields.io/badge/scipy-1.9.2-orange)](https://pypi.org/project/scipy/) [![scanpy 1.9.1](https://img.shields.io/badge/scanpy-1.9.1-red)](https://github.com/scverse/scanpy) [![igraph 0.10.2](https://img.shields.io/badge/igraph-0.10.2-blue)](https://pypi.org/project/igraph/) [![leidenalg 0.9.0](https://img.shields.io/badge/leidenalg-0.9.0-9cf)](https://pypi.org/project/leidenalg/) [![tqdm 4.64.1](https://img.shields.io/badge/tqdm-4.64.1-lightgrey)](https://pypi.org/project/tqdm/)
