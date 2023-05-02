@@ -56,3 +56,6 @@ Additional step-by-step tutorials now available! Preprocessed datasets used can 
 
 ## About
 scSpace was developed by Jie Liao and Jingyang Qian. Should you have any questions, please contact Jie Liao at liaojie@zju.edu.cn, or Jingyang Qian at qianjingyang@zju.edu.cn
+
+## References
+Qian, J., Liao, J., Liu, Z. et al. Reconstruction of the cell pseudo-space from single-cell RNA sequencing data with scSpace. Nat Commun 14, 2484 (2023). [https://doi.org/10.1038/s41467-023-38121-4](https://doi.org/10.1038/s41467-023-38121-4)
